@@ -15,7 +15,7 @@ function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedSite, setSelectedSite] = useState<'All' | 'Site 1' | 'Site 2'>('All');
+  const [selectedSite, setSelectedSite] = useState<'All' | 'Bureau 1' | 'Bureau 2'>('All');
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [config, setConfig] = useState<Config | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -89,9 +89,28 @@ function App() {
       )
       .subscribe();
 
+    const mealsSubscription = supabase
+      .channel('public:meals')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'meals' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setMeals(current => [...current, payload.new as Meal]);
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new as Meal;
+            setMeals(current => current.map(m => m.id === updated.id ? updated : m));
+          } else if (payload.eventType === 'DELETE') {
+            setMeals(current => current.filter(m => m.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(ordersSubscription);
       supabase.removeChannel(settingsSubscription);
+      supabase.removeChannel(mealsSubscription);
     };
   }, []);
 
@@ -115,8 +134,8 @@ function App() {
       if (employeesRes.data) {
         // Tri par Site, puis par Département, puis par Nom
         const sortedEmployees = [...employeesRes.data].sort((a, b) => {
-          const siteA = a.site || 'Site 1';
-          const siteB = b.site || 'Site 1';
+          const siteA = a.site || 'Bureau 1';
+          const siteB = b.site || 'Bureau 1';
           if (siteA !== siteB) return siteA.localeCompare(siteB);
           
           const deptA = a.department || '';
@@ -168,11 +187,11 @@ function App() {
   };
 
   const sendToWhatsApp = () => {
-    const sites = ['Site 1', 'Site 2'];
+    const sites = ['Bureau 1', 'Bureau 2'];
     let fullMessage = '🍽️ *COMMANDES REPAS POUR DEMAIN*\n\n';
 
     sites.forEach((site) => {
-      const siteEmployees = employees.filter(e => (e.site || 'Site 1') === site);
+      const siteEmployees = employees.filter(e => (e.site || 'Bureau 1') === site);
       const siteOrders = orders.filter(o => siteEmployees.some(e => e.id === o.employee_id));
 
       if (siteOrders.length === 0) return;
@@ -180,7 +199,7 @@ function App() {
       fullMessage += `📍 *--- ${site.toUpperCase()} ---*\n`;
       
       const siteCounts: Record<string, number> = {};
-      meals.forEach(m => {
+      activeMeals.forEach(m => {
         const mOrders = siteOrders.filter(o => o.meal_id === m.id);
         if (mOrders.length === 0) return;
 
@@ -216,18 +235,20 @@ function App() {
     'All',
     ...new Set(
       employees
-        .filter(e => selectedSite === 'All' || (e.site || 'Site 1') === selectedSite)
+        .filter(e => selectedSite === 'All' || (e.site || 'Bureau 1') === selectedSite)
         .map(e => e.department)
         .filter(Boolean)
     )
   ].sort();
 
   const filteredEmployees = employees.filter(e => {
-    const siteMatches = selectedSite === 'All' || (e.site || 'Site 1') === selectedSite;
+    const siteMatches = selectedSite === 'All' || (e.site || 'Bureau 1') === selectedSite;
     const deptMatches = selectedDept === 'All' || e.department === selectedDept;
     const nameMatches = e.name.toLowerCase().includes(searchTerm.toLowerCase());
     return siteMatches && deptMatches && nameMatches;
   });
+
+  const activeMeals = meals.filter(m => m.is_active);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -308,7 +329,7 @@ function App() {
                   </div>
 
                   <div className="flex bg-slate-100 p-1 rounded-xl w-fit">
-                    {['All', 'Site 1', 'Site 2'].map((site) => (
+                    {['All', 'Bureau 1', 'Bureau 2'].map((site) => (
                       <button
                         key={site}
                         onClick={() => {
@@ -342,14 +363,14 @@ function App() {
 
               <OrderGrid
                 employees={filteredEmployees}
-                meals={meals}
+                meals={activeMeals}
                 orders={orders}
                 isLocked={isLocked}
                 onCellClick={handleCellClick}
               />
             </div>
 
-            <Summary meals={meals} orders={orders} employees={employees} />
+            <Summary meals={activeMeals} orders={orders} employees={employees} />
           </div>
 
           <div className="mt-8 flex justify-end gap-4">
@@ -384,7 +405,7 @@ function App() {
       {isExportOpen && (
         <ExportModal
           employees={employees}
-          meals={meals}
+          meals={activeMeals}
           orders={orders}
           onClose={() => setIsExportOpen(false)}
         />

@@ -8,7 +8,7 @@ interface SummaryProps {
 }
 
 export default function Summary({ meals, orders, employees }: SummaryProps) {
-  const sites = ['Site 1', 'Site 2'];
+  const sites = ['Bureau 1', 'Bureau 2'];
   const total = orders.length;
 
   if (total === 0) return null;
@@ -24,7 +24,7 @@ export default function Summary({ meals, orders, employees }: SummaryProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {sites.map(site => {
-          const siteEmployees = employees.filter(e => (e.site || 'Site 1') === site);
+          const siteEmployees = employees.filter(e => (e.site || 'Bureau 1') === site);
           const siteOrders = orders.filter(o => siteEmployees.some(e => e.id === o.employee_id));
           
           if (siteOrders.length === 0) return null;

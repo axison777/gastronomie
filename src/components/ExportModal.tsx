@@ -12,7 +12,7 @@ interface ExportModalProps {
 }
 
 export default function ExportModal({ employees, meals, orders, onClose }: ExportModalProps) {
-  const [selectedSite, setSelectedSite] = useState<'All' | 'Site 1' | 'Site 2'>('All');
+  const [selectedSite, setSelectedSite] = useState<'All' | 'Bureau 1' | 'Bureau 2'>('All');
   const [selectedDept, setSelectedDept] = useState<string>('All');
 
   const departments = ['All', ...new Set(employees.map(e => e.department).filter(Boolean))].sort();
@@ -26,20 +26,20 @@ export default function ExportModal({ employees, meals, orders, onClose }: Expor
     
     doc.setFontSize(12);
     doc.text(`Date: ${date}`, 14, 30);
-    doc.text(`Site: ${selectedSite === 'All' ? 'Tous' : selectedSite}`, 14, 37);
+    doc.text(`Bureau: ${selectedSite === 'All' ? 'Tous' : selectedSite}`, 14, 37);
     if (selectedDept !== 'All') {
       doc.text(`Departement: ${selectedDept}`, 14, 44);
     }
 
     const filtered = employees.filter(e => {
-      const siteMatch = selectedSite === 'All' || (e.site || 'Site 1') === selectedSite;
+      const siteMatch = selectedSite === 'All' || (e.site || 'Bureau 1') === selectedSite;
       const deptMatch = selectedDept === 'All' || e.department === selectedDept;
       return siteMatch && deptMatch;
     });
 
-    const tableHeaders = ['Nom', 'Site', 'Departement', ...meals.map(m => m.name)];
+    const tableHeaders = ['Nom', 'Bureau', 'Departement', ...meals.map(m => m.name)];
     const tableData = filtered.map(emp => {
-      const row = [emp.name, emp.site || 'Site 1', emp.department || '-'];
+      const row = [emp.name, emp.site || 'Bureau 1', emp.department || '-'];
       meals.forEach(m => {
         const order = orders.find(o => o.employee_id === emp.id && o.meal_id === m.id);
         if (order) {
@@ -78,9 +78,9 @@ export default function ExportModal({ employees, meals, orders, onClose }: Expor
         <div className="p-8 space-y-6">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-bold text-slate-700 mb-2">Choisir le Site</label>
+              <label className="block text-sm font-bold text-slate-700 mb-2">Choisir le Bureau</label>
               <div className="flex bg-slate-100 p-1 rounded-xl w-full">
-                {['All', 'Site 1', 'Site 2'].map((site) => (
+                {['All', 'Bureau 1', 'Bureau 2'].map((site) => (
                   <button
                     key={site}
                     onClick={() => setSelectedSite(site as any)}

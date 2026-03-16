@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase, type Employee, type Meal, type Settings as Config } from '../lib/supabase';
-import { Trash2, Users, Utensils, Save, X, LayoutDashboard, Settings as SettingsIcon, Clock } from 'lucide-react';
+import { Trash2, Users, Utensils, Save, X, LayoutDashboard, Settings as SettingsIcon, Clock, Plus, Search } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 
 interface AdminDashboardProps {
@@ -14,10 +14,14 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ employees, meals, config, onDataUpdate, onClose }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'meals' | 'employees' | 'settings'>('meals');
   const [editingMeal, setEditingMeal] = useState<{ id: string, name: string, has_options: boolean } | null>(null);
-  const [newEmployee, setNewEmployee] = useState({ name: '', site: 'Site 1', department: '' });
+  const [newMeal, setNewMeal] = useState({ name: '', has_options: false });
+  const [newEmployee, setNewEmployee] = useState({ name: '', site: 'Bureau 1', department: '' });
   const [isPublishing, setIsPublishing] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showMealBulkImport, setShowMealBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [mealBulkText, setMealBulkText] = useState('');
+  const [mealSearchTerm, setMealSearchTerm] = useState('');
   const [newLockTime, setNewLockTime] = useState(config?.lock_time || '18:00');
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -45,9 +49,114 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
         .eq('id', editingMeal.id);
       setEditingMeal(null);
       onDataUpdate();
+    } catch (e: any) {
+      console.error(e);
+      setModalConfig({
+        isOpen: true,
+        title: 'Erreur',
+        message: `Erreur lors de la mise à jour : ${e.message || 'Problème de permission (RLS)'}`,
+        type: 'danger',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    }
+  };
+
+  const handleAddMeal = async () => {
+    if (!newMeal.name.trim()) return;
+    try {
+      await supabase.from('meals').insert(newMeal);
+      setNewMeal({ name: '', has_options: false });
+      onDataUpdate();
+      setModalConfig({
+        isOpen: true,
+        title: 'Plat ajouté',
+        message: 'Le nouveau plat a été ajouté au menu avec succès.',
+        type: 'alert',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleToggleMealActive = async (id: string, currentStatus: boolean) => {
+    try {
+      await supabase.from('meals').update({ is_active: !currentStatus }).eq('id', id);
+      onDataUpdate();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeselectAllMeals = async () => {
+    try {
+      await supabase.from('meals').update({ is_active: false }).neq('id', '00000000-0000-0000-0000-000000000000'); // Standard way to update all rows
+      onDataUpdate();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMealBulkImport = async () => {
+    const lines = mealBulkText.split('\n').filter(line => line.trim());
+    const mealsToInsert = lines.map(line => {
+      const parts = line.split(';');
+      const name = parts[0]?.trim();
+      const hasOptions = parts[1]?.trim().toLowerCase() === 'oui' || parts[1]?.trim().toLowerCase() === 'yes' || parts[1]?.trim().toLowerCase() === 'true';
+      if (!name) return null;
+      return { name, has_options: hasOptions, is_active: false };
+    }).filter(Boolean);
+
+    if (mealsToInsert.length === 0) return;
+
+    try {
+      await supabase.from('meals').insert(mealsToInsert);
+      setMealBulkText('');
+      setShowMealBulkImport(false);
+      onDataUpdate();
+      setModalConfig({
+        isOpen: true,
+        title: 'Importation réussie',
+        message: `${mealsToInsert.length} plats ajoutés à la bibliothèque !`,
+        type: 'alert',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    } catch (e) {
+      console.error(e);
+      setModalConfig({
+        isOpen: true,
+        title: 'Erreur',
+        message: "Erreur lors de l'importation. Format: Nom; Option(oui/non)",
+        type: 'danger',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    }
+  };
+
+  const handleDeleteMeal = async (id: string, name: string) => {
+    setModalConfig({
+      isOpen: true,
+      title: 'Supprimer le plat ?',
+      message: `Voulez-vous vraiment supprimer "${name}" du menu ? Cela supprimera aussi les commandes liées à ce plat aujourd'hui.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase.from('meals').delete().eq('id', id);
+          if (error) throw error;
+          onDataUpdate();
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (e: any) {
+          console.error(e);
+          setModalConfig({
+            isOpen: true,
+            title: 'Échec de la suppression',
+            message: `Impossible de supprimer le plat. ${e.message === 'new row violates row-level security policy for table "meals"' ? 'Problème de permissions (RLS).' : e.message}`,
+            type: 'danger',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+          });
+        }
+      }
+    });
   };
 
   const handleAddEmployee = async () => {
@@ -58,7 +167,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
         site: newEmployee.site,
         department: newEmployee.department
       });
-      setNewEmployee({ name: '', site: 'Site 1', department: '' });
+      setNewEmployee({ name: '', site: 'Bureau 1', department: '' });
       onDataUpdate();
     } catch (e) {
       console.error(e);
@@ -70,7 +179,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
     const employeesToInsert = lines.map(line => {
       const parts = line.split(';');
       const name = parts[0]?.trim();
-      const site = parts[1]?.trim() || 'Site 1';
+      const site = parts[1]?.trim() || 'Bureau 1';
       const department = parts[2]?.trim() || '';
       if (!name) return null;
       return { name, site, department };
@@ -110,12 +219,20 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
       type: 'danger',
       onConfirm: async () => {
         try {
-          await supabase.from('employees').delete().eq('id', id);
+          const { error } = await supabase.from('employees').delete().eq('id', id);
+          if (error) throw error;
           onDataUpdate();
-        } catch (e) {
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (e: any) {
           console.error(e);
+          setModalConfig({
+            isOpen: true,
+            title: 'Échec de la suppression',
+            message: `Impossible de supprimer la personne. ${e.message === 'new row violates row-level security policy for table "employees"' ? 'Problème de permissions (RLS).' : e.message}`,
+            type: 'danger',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+          });
         }
-        setModalConfig(prev => ({ ...prev, isOpen: false }));
       }
     });
   };
@@ -207,37 +324,136 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
         <div className="flex-1 overflow-y-auto p-8">
           {activeTab === 'meals' ? (
             <div className="space-y-6">
-              <div className="bg-amber-50 rounded-xl p-4 border border-amber-100 text-amber-800 text-sm">
-                Modifiez les plats du jour ici. Une fois terminé, cliquez sur <strong>"Publier le Menu"</strong> pour ouvrir les commandes.
+              <div className="flex justify-between items-center bg-amber-50 rounded-xl p-4 border border-amber-100">
+                <p className="text-amber-800 text-sm">
+                  Cochez les plats à afficher pour aujourd'hui. Une fois terminé, cliquez sur <strong>"Publier le Menu"</strong>.
+                </p>
+                <div className="flex items-center gap-4">
+                  <button 
+                    onClick={handleDeselectAllMeals}
+                    className="text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
+                  >
+                    Tout débloquer
+                  </button>
+                  <button 
+                    onClick={() => setShowMealBulkImport(!showMealBulkImport)}
+                    className="text-indigo-600 hover:underline text-xs font-black uppercase tracking-widest"
+                  >
+                    {showMealBulkImport ? "Retour" : "Import Bulk Plats"}
+                  </button>
+                </div>
               </div>
-              <div className="grid gap-4">
-                {meals.map(meal => (
-                  <div key={meal.id} className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
-                    <div className="flex-1">
+
+              {showMealBulkImport ? (
+                <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-indigo-100 space-y-4">
+                  <div>
+                    <p className="text-sm font-bold text-slate-700 mb-2">Importer une liste de plats :</p>
+                    <p className="text-xs text-slate-500 mb-4 italic">Format: Nom du plat; Option Viande/Poisson (oui/non)</p>
+                    <textarea 
+                      className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-300 outline-none font-mono text-sm"
+                      placeholder="Riz au gras; oui&#10;Benga; non&#10;Spaghetti; oui"
+                      value={mealBulkText}
+                      onChange={e => setMealBulkText(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <button onClick={() => setShowMealBulkImport(false)} className="px-6 py-2 rounded-lg text-slate-600 hover:bg-slate-100">
+                      Annuler
+                    </button>
+                    <button onClick={handleMealBulkImport} className="px-6 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-md">
+                      Importer la bibliothèque
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {/* Barre de recherche des plats */}
+                  <div className="relative group mb-2">
+                    <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <input 
+                      type="text"
+                      placeholder="Rechercher un plat dans la bibliothèque..."
+                      value={mealSearchTerm}
+                      onChange={(e) => setMealSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-300 outline-none w-full text-sm font-medium transition-all shadow-sm"
+                    />
+                  </div>
+
+                  {/* Nouveau Plat */}
+                <div className="flex items-center gap-4 p-4 bg-indigo-50/50 rounded-xl border-2 border-dashed border-indigo-200">
+                  <div className="flex-1 flex flex-col gap-2">
+                    <input
+                      placeholder="Nom du nouveau plat (ex: Riz au gras)"
+                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 focus:ring-2 focus:ring-indigo-300 outline-none font-bold text-slate-700"
+                      value={newMeal.name}
+                      onChange={e => setNewMeal({ ...newMeal, name: e.target.value })}
+                    />
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newMeal.has_options}
+                        onChange={e => setNewMeal({ ...newMeal, has_options: e.target.checked })}
+                        className="rounded text-indigo-600 focus:ring-indigo-500"
+                      />
+                      PROPOSER OPTION VIANDE/POISSON
+                    </label>
+                  </div>
+                  <button
+                    onClick={handleAddMeal}
+                    disabled={!newMeal.name.trim()}
+                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-black hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2"
+                  >
+                    <Plus size={18} strokeWidth={3} />
+                    AJOUTER
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 my-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <div className="flex-1 h-px bg-slate-100"></div>
+                  Bibliothèque de Plats ({meals.filter(m => m.name.toLowerCase().includes(mealSearchTerm.toLowerCase())).length})
+                  <div className="flex-1 h-px bg-slate-100"></div>
+                </div>
+
+                {meals
+                  .filter(meal => meal.name.toLowerCase().includes(mealSearchTerm.toLowerCase()))
+                  .map(meal => (
+                  <div key={meal.id} className={`flex items-center gap-4 p-4 rounded-xl border transition-all group ${meal.is_active ? 'bg-indigo-50 border-indigo-200 shadow-indigo-50' : 'bg-white border-slate-200 shadow-sm hover:shadow-md'}`}>
+                    <div 
+                      className="flex-shrink-0 cursor-pointer"
+                      onClick={() => handleToggleMealActive(meal.id, meal.is_active || false)}
+                    >
+                      <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${meal.is_active ? 'bg-indigo-600 border-indigo-600 text-white scale-110' : 'bg-white border-slate-300 text-transparent'}`}>
+                        <Plus size={14} strokeWidth={4} />
+                      </div>
+                    </div>
+                    <div 
+                      className="flex-1 cursor-pointer"
+                      onClick={() => handleToggleMealActive(meal.id, meal.is_active || false)}
+                    >
                       {editingMeal?.id === meal.id ? (
                         <div className="flex flex-col gap-2">
                           <input
                             autoFocus
-                            className="w-full px-3 py-2 rounded border border-indigo-300 focus:ring-2 focus:ring-indigo-200 outline-none font-medium"
+                            className="w-full px-3 py-2 rounded border-2 border-indigo-300 focus:ring-0 outline-none font-bold text-slate-800"
                             value={editingMeal.name}
                             onChange={e => setEditingMeal({ ...editingMeal, name: e.target.value })}
                           />
-                          <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+                          <label className="flex items-center gap-2 text-xs font-bold text-indigo-600 cursor-pointer">
                             <input
                               type="checkbox"
                               checked={editingMeal.has_options}
                               onChange={e => setEditingMeal({ ...editingMeal, has_options: e.target.checked })}
                               className="rounded text-indigo-600 focus:ring-indigo-500"
                             />
-                            Proposer Option Viande/Poisson
+                            ACTIVER OPTIONS VIANDE/POISSON
                           </label>
                         </div>
                       ) : (
-                        <div>
-                          <span className="font-medium text-slate-700">{meal.name}</span>
+                        <div className="flex flex-col">
+                          <span className="font-extrabold text-slate-800 text-lg">{meal.name}</span>
                           {meal.has_options && (
-                            <span className="ml-2 text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold">
-                              Options Viande/Poisson
+                            <span className="w-fit mt-1 text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md font-black uppercase tracking-tighter">
+                              Options Viande/Poisson incluses
                             </span>
                           )}
                         </div>
@@ -246,22 +462,28 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                     <div className="flex gap-2">
                       {editingMeal?.id === meal.id ? (
                         <>
-                          <button onClick={handleUpdateMeal} className="p-2 bg-emerald-500 text-white rounded hover:bg-emerald-600">
-                            <Save size={18} />
+                          <button onClick={handleUpdateMeal} className="p-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 shadow-lg shadow-emerald-100 transition-all">
+                            <Save size={20} />
                           </button>
-                          <button onClick={() => setEditingMeal(null)} className="p-2 bg-slate-200 text-slate-600 rounded hover:bg-slate-300">
-                            <X size={18} />
+                          <button onClick={() => setEditingMeal(null)} className="p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-all">
+                            <X size={20} />
                           </button>
                         </>
                       ) : (
-                        <button onClick={() => setEditingMeal({ id: meal.id, name: meal.name, has_options: meal.has_options || false })} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded">
-                          Modifier
-                        </button>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => setEditingMeal({ id: meal.id, name: meal.name, has_options: meal.has_options || false })} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold text-sm">
+                            Modifier
+                          </button>
+                          <button onClick={() => handleDeleteMeal(meal.id, meal.name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                            <Trash2 size={20} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
                 ))}
               </div>
+              )}
               <div className="pt-6 border-t border-slate-100 flex justify-end">
                 <button
                   onClick={handlePublishMenu}
@@ -288,10 +510,10 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                 <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-indigo-100 space-y-4">
                   <div>
                     <p className="text-sm font-bold text-slate-700 mb-2">Collez votre liste ici :</p>
-                    <p className="text-xs text-slate-500 mb-4 italic">Format: Nom; Site; Département (Ex: Jean Dupont; Site 1; RH)</p>
+                    <p className="text-xs text-slate-500 mb-4 italic">Format: Nom; Bureau; Département (Ex: Jean Dupont; Bureau 1; RH)</p>
                     <textarea 
                       className="w-full h-48 p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-300 outline-none font-mono text-sm"
-                      placeholder="Jean Dupont; Site 1; RH&#10;Marie Durand; Site 2; Informatique"
+                      placeholder="Jean Dupont; Bureau 1; RH&#10;Marie Durand; Bureau 2; Informatique"
                       value={bulkText}
                       onChange={e => setBulkText(e.target.value)}
                     />
@@ -319,8 +541,8 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                       value={newEmployee.site}
                       onChange={e => setNewEmployee({ ...newEmployee, site: e.target.value })}
                     >
-                      <option value="Site 1">Site 1</option>
-                      <option value="Site 2">Site 2</option>
+                      <option value="Bureau 1">Bureau 1</option>
+                      <option value="Bureau 2">Bureau 2</option>
                     </select>
                     <input
                       placeholder="Département"
@@ -342,7 +564,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                       <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
                         <tr>
                           <th className="px-6 py-4">Nom</th>
-                          <th className="px-6 py-4">Site</th>
+                          <th className="px-6 py-4">Bureau</th>
                           <th className="px-6 py-4">Département</th>
                           <th className="px-6 py-4">Actions</th>
                         </tr>
@@ -351,7 +573,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                         {employees.map(emp => (
                           <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-6 py-4 font-medium">{emp.name}</td>
-                            <td className="px-6 py-4 text-xs font-bold text-slate-400">{emp.site || 'Site 1'}</td>
+                            <td className="px-6 py-4 text-xs font-bold text-slate-400">{emp.site || 'Bureau 1'}</td>
                             <td className="px-6 py-4 text-slate-600">{emp.department || '-'}</td>
                             <td className="px-6 py-4">
                               <button onClick={() => handleDeleteEmployee(emp.id)} className="text-red-500 hover:text-red-700 p-2">

@@ -18,6 +18,7 @@ export interface Meal {
   name: string;
   created_at: string;
   has_options?: boolean;
+  is_active?: boolean;
 }
 
 export interface Order {
