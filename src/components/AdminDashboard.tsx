@@ -22,6 +22,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
   const [bulkText, setBulkText] = useState('');
   const [mealBulkText, setMealBulkText] = useState('');
   const [mealSearchTerm, setMealSearchTerm] = useState('');
+  const [showNewMealForm, setShowNewMealForm] = useState(false);
   const [newLockTime, setNewLockTime] = useState(config?.lock_time || '18:00');
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
@@ -66,6 +67,8 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
     try {
       await supabase.from('meals').insert(newMeal);
       setNewMeal({ name: '', has_options: false });
+      setShowNewMealForm(false);
+      setMealSearchTerm('');
       onDataUpdate();
       setModalConfig({
         isOpen: true,
@@ -102,31 +105,44 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
     const mealsToInsert = lines.map(line => {
       const parts = line.split(';');
       const name = parts[0]?.trim();
-      const hasOptions = parts[1]?.trim().toLowerCase() === 'oui' || parts[1]?.trim().toLowerCase() === 'yes' || parts[1]?.trim().toLowerCase() === 'true';
+      const optionPart = parts[1]?.trim()?.toLowerCase() || '';
+      const hasOptions = optionPart === 'oui' || optionPart === 'yes' || optionPart === 'true';
       if (!name) return null;
       return { name, has_options: hasOptions, is_active: false };
     }).filter(Boolean);
 
-    if (mealsToInsert.length === 0) return;
+    if (mealsToInsert.length === 0) {
+      setModalConfig({
+        isOpen: true,
+        title: 'Format incorrect',
+        message: 'Aucun plat valide trouvé. Utilisez le format: Nom; oui/non',
+        type: 'danger',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+      return;
+    }
 
     try {
-      await supabase.from('meals').insert(mealsToInsert);
+      const { error } = await supabase.from('meals').insert(mealsToInsert);
+      if (error) throw error;
+      
       setMealBulkText('');
+      setMealSearchTerm(''); // Reset search to see new items
       setShowMealBulkImport(false);
       onDataUpdate();
       setModalConfig({
         isOpen: true,
         title: 'Importation réussie',
-        message: `${mealsToInsert.length} plats ajoutés à la bibliothèque !`,
+        message: `${mealsToInsert.length} plats ajoutés à la bibliothèque ! N'oubliez pas de les cocher pour les afficher au menu du jour.`,
         type: 'alert',
         onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
       });
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setModalConfig({
         isOpen: true,
-        title: 'Erreur',
-        message: "Erreur lors de l'importation. Format: Nom; Option(oui/non)",
+        title: "Échec de l'importation",
+        message: `Une erreur est survenue : ${e.message || 'Problème de connexion ou de permissions'}`,
         type: 'danger',
         onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
       });
@@ -367,8 +383,58 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                 </div>
               ) : (
                 <div className="grid gap-4">
-                  {/* Barre de recherche des plats */}
-                  <div className="relative group mb-2">
+                  {/* Nouveau Plat - Collapsible */}
+                  {!showNewMealForm ? (
+                    <button 
+                      onClick={() => setShowNewMealForm(true)}
+                      className="flex items-center justify-center gap-2 p-4 bg-indigo-50 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-600 font-black hover:bg-indigo-100 transition-all group"
+                    >
+                      <Plus size={20} strokeWidth={3} className="group-hover:scale-110 transition-transform" />
+                      AJOUTER UN NOUVEAU PLAT À LA BIBLIOTHÈQUE
+                    </button>
+                  ) : (
+                    <div className="bg-indigo-50 p-6 rounded-2xl border-2 border-indigo-200 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="text-sm font-black text-indigo-900 uppercase">Nouveau Plat</h4>
+                        <button onClick={() => setShowNewMealForm(false)} className="text-indigo-400 hover:text-indigo-600">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      <div className="flex flex-col gap-4">
+                        <input
+                          autoFocus
+                          placeholder="Nom du plat (ex: Riz au gras)"
+                          className="w-full px-4 py-3 rounded-xl border-2 border-indigo-100 focus:border-indigo-300 outline-none font-bold text-slate-700 bg-white"
+                          value={newMeal.name}
+                          onChange={e => setNewMeal({ ...newMeal, name: e.target.value })}
+                        />
+                        <div className="flex items-center justify-between">
+                          <label className="flex items-center gap-3 text-sm font-bold text-indigo-600 cursor-pointer select-none">
+                            <div className="relative flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={newMeal.has_options}
+                                onChange={e => setNewMeal({ ...newMeal, has_options: e.target.checked })}
+                                className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-2 border-indigo-200 transition-all checked:bg-indigo-600 checked:border-indigo-600"
+                              />
+                              <Plus className="absolute h-3.5 w-3.5 text-white opacity-0 peer-checked:opacity-100 pointer-events-none left-0.5" strokeWidth={5} />
+                            </div>
+                            PROPOSER OPTION VIANDE/POISSON
+                          </label>
+                          <button
+                            onClick={handleAddMeal}
+                            disabled={!newMeal.name.trim()}
+                            className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-black hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-lg shadow-indigo-100"
+                          >
+                            ENREGISTRER LE PLAT
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Barre de recherche des plats - Now below creation */}
+                  <div className="relative group">
                     <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
                     <input 
                       type="text"
@@ -379,36 +445,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                     />
                   </div>
 
-                  {/* Nouveau Plat */}
-                <div className="flex items-center gap-4 p-4 bg-indigo-50/50 rounded-xl border-2 border-dashed border-indigo-200">
-                  <div className="flex-1 flex flex-col gap-2">
-                    <input
-                      placeholder="Nom du nouveau plat (ex: Riz au gras)"
-                      className="w-full px-3 py-2 rounded-lg border border-indigo-200 focus:ring-2 focus:ring-indigo-300 outline-none font-bold text-slate-700"
-                      value={newMeal.name}
-                      onChange={e => setNewMeal({ ...newMeal, name: e.target.value })}
-                    />
-                    <label className="flex items-center gap-2 text-xs font-bold text-slate-500 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={newMeal.has_options}
-                        onChange={e => setNewMeal({ ...newMeal, has_options: e.target.checked })}
-                        className="rounded text-indigo-600 focus:ring-indigo-500"
-                      />
-                      PROPOSER OPTION VIANDE/POISSON
-                    </label>
-                  </div>
-                  <button
-                    onClick={handleAddMeal}
-                    disabled={!newMeal.name.trim()}
-                    className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-black hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2"
-                  >
-                    <Plus size={18} strokeWidth={3} />
-                    AJOUTER
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 my-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <div className="flex items-center gap-2 my-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
                   <div className="flex-1 h-px bg-slate-100"></div>
                   Bibliothèque de Plats ({meals.filter(m => m.name.toLowerCase().includes(mealSearchTerm.toLowerCase())).length})
                   <div className="flex-1 h-px bg-slate-100"></div>
