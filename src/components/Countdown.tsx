@@ -3,19 +3,22 @@ import { Clock } from 'lucide-react';
 
 interface CountdownProps {
   isLocked: boolean;
+  lockTime?: string;
 }
 
-export default function Countdown({ isLocked }: CountdownProps) {
-  const [timeLeft, setTimeLeft] = useState('');
+export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownProps) {
+  const [timeLeft, setTimeLeft] = useState('--:--:--');
 
   useEffect(() => {
     const updateCountdown = () => {
       const now = new Date();
       const target = new Date();
-      target.setHours(23, 0, 0, 0);
+      
+      const [hoursLimit, minutesLimit] = lockTime.split(':').map(Number);
+      target.setHours(hoursLimit || 18, minutesLimit || 0, 0, 0);
 
       if (now >= target) {
-        setTimeLeft('Clôturé');
+        setTimeLeft('Fermé');
         return;
       }
 
@@ -34,31 +37,31 @@ export default function Countdown({ isLocked }: CountdownProps) {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [lockTime]);
 
   return (
     <div
-      className={`flex items-center gap-3 px-6 py-3 rounded-lg ${
+      className={`flex items-center gap-4 px-6 py-3 rounded-2xl shadow-sm transition-all border-2 ${
         isLocked
-          ? 'bg-red-100 border-2 border-red-300'
-          : 'bg-blue-100 border-2 border-blue-300'
+          ? 'bg-slate-50 border-slate-200'
+          : 'bg-indigo-50 border-indigo-200 animate-pulse-subtle'
       }`}
     >
       <Clock
-        className={isLocked ? 'text-red-600' : 'text-blue-600'}
+        className={isLocked ? 'text-slate-400' : 'text-indigo-600'}
         size={24}
       />
       <div>
         <p
-          className={`text-xs font-medium ${
-            isLocked ? 'text-red-700' : 'text-blue-700'
+          className={`text-[10px] font-bold uppercase tracking-wider ${
+            isLocked ? 'text-slate-500' : 'text-indigo-500'
           }`}
         >
-          {isLocked ? 'Commandes fermées' : 'Temps restant'}
+          {isLocked ? 'Session Clôturée' : 'Fin des commandes'}
         </p>
         <p
-          className={`text-2xl font-bold ${
-            isLocked ? 'text-red-800' : 'text-blue-800'
+          className={`text-2xl font-black tabular-nums ${
+            isLocked ? 'text-slate-400' : 'text-indigo-700'
           }`}
         >
           {timeLeft}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import type { Employee, Meal, Order } from '../lib/supabase';
 
@@ -6,7 +7,7 @@ interface OrderGridProps {
   meals: Meal[];
   orders: Order[];
   isLocked: boolean;
-  onCellClick: (employeeId: string, mealId: string) => void;
+  onCellClick: (employeeId: string, mealId: string, option: 'Viande' | 'Poisson' | null) => void;
 }
 
 export default function OrderGrid({
@@ -16,60 +17,130 @@ export default function OrderGrid({
   isLocked,
   onCellClick,
 }: OrderGridProps) {
-  const isSelected = (employeeId: string, mealId: string) => {
-    return orders.some(
+  const [showOptionMenu, setShowOptionMenu] = useState<{ employeeId: string, mealId: string } | null>(null);
+
+  const getSelection = (employeeId: string, mealId: string) => {
+    return orders.find(
       (o) => o.employee_id === employeeId && o.meal_id === mealId
     );
   };
 
+  const handleCellClick = (employeeId: string, meal: Meal) => {
+    if (isLocked) return;
+    
+    const existing = getSelection(employeeId, meal.id);
+    if (existing) {
+      onCellClick(employeeId, meal.id, null);
+      return;
+    }
+
+    if (meal.has_options) {
+      setShowOptionMenu({ employeeId, mealId: meal.id });
+    } else {
+      onCellClick(employeeId, meal.id, null);
+    }
+  };
+
+  const handleOptionSelect = (option: 'Viande' | 'Poisson') => {
+    if (showOptionMenu) {
+      onCellClick(showOptionMenu.employeeId, showOptionMenu.mealId, option);
+      setShowOptionMenu(null);
+    }
+  };
+
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
-      <table className="w-full">
+    <div className="relative overflow-x-auto rounded-2xl border-2 border-slate-300 shadow-sm">
+      <table className="w-full table-fixed min-w-[800px]">
         <thead>
-          <tr className="bg-slate-100">
-            <th className="py-4 px-6 text-left text-sm font-semibold text-slate-700 border-b border-slate-200">
-              Employé
+          <tr className="bg-slate-100/80 backdrop-blur-sm">
+            <th className="w-[200px] py-5 px-6 text-left text-sm font-black text-slate-600 uppercase tracking-wider border-b-2 border-slate-300">
+              personne
             </th>
             {meals.map((meal) => (
               <th
                 key={meal.id}
-                className="py-4 px-6 text-center text-sm font-semibold text-slate-700 border-b border-slate-200"
+                className="w-[150px] py-5 px-6 text-center text-sm font-black text-slate-600 uppercase tracking-wider border-b-2 border-slate-300 border-l border-slate-200"
               >
                 {meal.name}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-slate-300 bg-white">
           {employees.map((employee) => (
             <tr
               key={employee.id}
-              className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+              className="hover:bg-indigo-50/50 transition-colors group"
             >
-              <td className="py-4 px-6 font-medium text-slate-800">
-                {employee.name}
+              <td className="py-5 px-6 border-r border-slate-200">
+                <div className="font-extrabold text-slate-900 truncate">{employee.name}</div>
+                <div className="flex gap-2 mt-1.5">
+                  <span className="text-[10px] font-black px-2 py-0.5 bg-slate-200 text-slate-600 rounded-md uppercase">
+                    {employee.site || 'Site 1'}
+                  </span>
+                  {employee.department && (
+                    <span className="text-[10px] font-black px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-md uppercase">
+                      {employee.department}
+                    </span>
+                  )}
+                </div>
               </td>
               {meals.map((meal) => {
-                const selected = isSelected(employee.id, meal.id);
+                const order = getSelection(employee.id, meal.id);
+                const isSelected = !!order;
                 return (
-                  <td key={meal.id} className="py-4 px-6 text-center">
-                    <button
-                      onClick={() => onCellClick(employee.id, meal.id)}
-                      disabled={isLocked}
-                      className={`w-12 h-12 rounded-lg flex items-center justify-center transition-all transform hover:scale-105 ${
-                        selected
-                          ? 'bg-emerald-500 hover:bg-emerald-600 shadow-lg'
-                          : 'bg-slate-100 hover:bg-slate-200'
-                      } ${
-                        isLocked
-                          ? 'cursor-not-allowed opacity-60'
-                          : 'cursor-pointer'
-                      }`}
-                    >
-                      {selected && (
-                        <CheckCircle2 className="text-white" size={24} />
+                  <td key={meal.id} className="py-5 px-6 border-l border-slate-100">
+                    <div className="flex justify-center items-center">
+                      <button
+                        onClick={() => handleCellClick(employee.id, meal)}
+                        disabled={isLocked}
+                        className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 ${
+                          isSelected
+                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200'
+                            : 'bg-slate-100 text-slate-300 hover:bg-slate-200 border border-slate-200'
+                        } ${
+                          isLocked
+                            ? 'cursor-not-allowed opacity-40 grayscale-[0.5]'
+                            : 'cursor-pointer'
+                        }`}
+                      >
+                        {isSelected ? (
+                          meal.has_options && order.protein_option ? (
+                            <span className="text-lg font-black">{order.protein_option[0]}</span>
+                          ) : (
+                            <CheckCircle2 size={24} strokeWidth={3} />
+                          )
+                        ) : null}
+                      </button>
+
+                      {showOptionMenu?.employeeId === employee.id && showOptionMenu?.mealId === meal.id && (
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-[60] bg-white rounded-xl shadow-2xl border-2 border-slate-200 py-2 w-36 overflow-hidden animate-in fade-in zoom-in duration-200 origin-top">
+                          <div className="px-3 pb-1 mb-1 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase">
+                            Choisir option
+                          </div>
+                          <button
+                            onClick={() => handleOptionSelect('Viande')}
+                            className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center justify-between"
+                          >
+                            Viande
+                            <span className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center text-xs">V</span>
+                          </button>
+                          <button
+                            onClick={() => handleOptionSelect('Poisson')}
+                            className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center justify-between border-t border-slate-50"
+                          >
+                            Poisson
+                            <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xs">P</span>
+                          </button>
+                          <button
+                            onClick={() => setShowOptionMenu(null)}
+                            className="w-full px-4 py-2 text-center text-[10px] font-black text-slate-400 hover:text-red-500 transition-colors border-t border-slate-50"
+                          >
+                            ANNULER
+                          </button>
+                        </div>
                       )}
-                    </button>
+                    </div>
                   </td>
                 );
               })}
