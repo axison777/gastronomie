@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { supabase, type Employee, type Meal, type Settings as Config } from '../lib/supabase';
-import { Trash2, Users, Utensils, Save, X, LayoutDashboard, Settings as SettingsIcon, Clock, Plus, Search } from 'lucide-react';
+import { Trash2, Users, Utensils, Save, X, LayoutDashboard, Settings as SettingsIcon, Clock, Plus, Search, Send } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 
 interface AdminDashboardProps {
@@ -16,19 +16,20 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
   const [editingMeal, setEditingMeal] = useState<{ id: string, name: string, has_options: boolean } | null>(null);
   const [newMeal, setNewMeal] = useState({ name: '', has_options: false });
   const [newEmployee, setNewEmployee] = useState({ name: '', site: 'Bureau 1', department: '' });
-  const [isPublishing, setIsPublishing] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showMealBulkImport, setShowMealBulkImport] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [mealBulkText, setMealBulkText] = useState('');
   const [mealSearchTerm, setMealSearchTerm] = useState('');
   const [showNewMealForm, setShowNewMealForm] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [newLockTime, setNewLockTime] = useState(config?.lock_time || '18:00');
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
     title: string;
     message: string;
     type?: 'confirm' | 'alert' | 'danger';
+    confirmText?: string;
     onConfirm: () => void;
   }>({
     isOpen: false,
@@ -147,6 +148,52 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
         onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
       });
     }
+  };
+
+  const handlePublishMenu = async () => {
+    setModalConfig({
+      isOpen: true,
+      title: 'Publier le Menu ?',
+      message: 'Attention : cela va déverrouiller le tableau pour tout le monde et EFFACER TOUTES LES COMMANDES d\'aujourd\'hui pour démarrer une nouvelle session.',
+      type: 'confirm',
+      confirmText: 'Oui, Publier et Réinitialiser',
+      onConfirm: async () => {
+        setIsPublishing(true);
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          
+          // 1. Mettre à jour la date de publication (déverrouille l'app)
+          const { error: settingsError } = await supabase
+            .from('settings')
+            .update({ last_publish_date: today })
+            .eq('id', 'config');
+          
+          if (settingsError) throw settingsError;
+
+          // 2. Supprimer les commandes du jour
+          const { error: ordersError } = await supabase
+            .from('orders')
+            .delete()
+            .eq('order_date', today);
+          
+          if (ordersError) throw ordersError;
+
+          onDataUpdate();
+          setModalConfig(prev => ({ ...prev, isOpen: false }));
+        } catch (e: any) {
+          console.error(e);
+          setModalConfig({
+            isOpen: true,
+            title: 'Erreur lors de la publication',
+            message: e.message,
+            type: 'danger',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+          });
+        } finally {
+          setIsPublishing(false);
+        }
+      }
+    });
   };
 
   const handleDeleteMeal = async (id: string, name: string) => {
@@ -269,33 +316,6 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
     }
   };
 
-  const handlePublishMenu = async () => {
-    setModalConfig({
-      isOpen: true,
-      title: 'Publier le menu ?',
-      message: 'Cela effacera toutes les commandes actuelles et déverrouillera le tableau pour aujourd\'hui.',
-      onConfirm: async () => {
-        setIsPublishing(true);
-        try {
-          const today = new Date().toISOString().split('T')[0];
-          await supabase.from('orders').delete().eq('order_date', today);
-          await supabase.from('settings').update({ last_publish_date: today }).eq('id', 'config');
-          onDataUpdate();
-          setModalConfig({
-            isOpen: true,
-            title: 'Menu publié',
-            message: 'Le tableau est maintenant ouvert aux commandes.',
-            type: 'alert',
-            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
-          });
-        } catch (e) {
-          console.error(e);
-        } finally {
-          setIsPublishing(false);
-        }
-      }
-    });
-  };
 
   return (
     <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -344,7 +364,17 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                 <p className="text-amber-800 text-sm">
                   Cochez les plats à afficher pour aujourd'hui. Une fois terminé, cliquez sur <strong>"Publier le Menu"</strong>.
                 </p>
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6">
+                  <button 
+                    onClick={handlePublishMenu}
+                    disabled={isPublishing}
+                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-black text-xs uppercase tracking-widest hover:bg-emerald-700 shadow-md transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    <Send size={14} strokeWidth={3} />
+                    Publier le Menu
+                  </button>
+                  <div className="w-px h-6 bg-amber-200"></div>
+                  <div className="flex items-center gap-4">
                   <button 
                     onClick={handleDeselectAllMeals}
                     className="text-slate-400 hover:text-red-500 text-xs font-black uppercase tracking-widest transition-colors"
@@ -359,8 +389,9 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                   </button>
                 </div>
               </div>
+            </div>
 
-              {showMealBulkImport ? (
+            {showMealBulkImport ? (
                 <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-indigo-100 space-y-4">
                   <div>
                     <p className="text-sm font-bold text-slate-700 mb-2">Importer une liste de plats :</p>
@@ -520,16 +551,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                   </div>
                 ))}
               </div>
-              )}
-              <div className="pt-6 border-t border-slate-100 flex justify-end">
-                <button
-                  onClick={handlePublishMenu}
-                  disabled={isPublishing}
-                  className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:shadow-indigo-200 hover:-translate-y-0.5 transition-all disabled:opacity-50"
-                >
-                  {isPublishing ? 'Publication...' : '🚀 Publier le Menu pour Demain'}
-                </button>
-              </div>
+            )}
             </div>
           ) : activeTab === 'employees' ? (
             <div className="space-y-6">

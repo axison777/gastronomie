@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CheckCircle2 } from 'lucide-react';
 import type { Employee, Meal, Order } from '../lib/supabase';
 
@@ -17,7 +18,15 @@ export default function OrderGrid({
   isLocked,
   onCellClick,
 }: OrderGridProps) {
-  const [showOptionMenu, setShowOptionMenu] = useState<{ employeeId: string, mealId: string } | null>(null);
+  const [showOptionMenu, setShowOptionMenu] = useState<{ employeeId: string, mealId: string, x: number, y: number } | null>(null);
+
+  // Close menu on scroll to prevent misalignment
+  useEffect(() => {
+    if (!showOptionMenu) return;
+    const handleScroll = () => setShowOptionMenu(null);
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [showOptionMenu]);
 
   const getSelection = (employeeId: string, mealId: string) => {
     return orders.find(
@@ -25,7 +34,7 @@ export default function OrderGrid({
     );
   };
 
-  const handleCellClick = (employeeId: string, meal: Meal) => {
+  const handleCellClick = (e: React.MouseEvent, employeeId: string, meal: Meal) => {
     if (isLocked) return;
     
     const existing = getSelection(employeeId, meal.id);
@@ -35,7 +44,13 @@ export default function OrderGrid({
     }
 
     if (meal.has_options) {
-      setShowOptionMenu({ employeeId, mealId: meal.id });
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setShowOptionMenu({ 
+        employeeId, 
+        mealId: meal.id, 
+        x: rect.left + rect.width / 2, 
+        y: rect.top 
+      });
     } else {
       onCellClick(employeeId, meal.id, null);
     }
@@ -92,9 +107,9 @@ export default function OrderGrid({
                   <td key={meal.id} className="py-5 px-6 border-l border-slate-100">
                     <div className="flex justify-center items-center">
                       <button
-                        onClick={() => handleCellClick(employee.id, meal)}
+                        onClick={(e) => handleCellClick(e, employee.id, meal)}
                         disabled={isLocked}
-                        className={`relative w-12 h-12 rounded-xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 ${
+                        className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all transform hover:scale-110 active:scale-95 ${
                           isSelected
                             ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200'
                             : 'bg-slate-100 text-slate-300 hover:bg-slate-200 border border-slate-200'
@@ -113,33 +128,54 @@ export default function OrderGrid({
                         ) : null}
                       </button>
 
-                      {showOptionMenu?.employeeId === employee.id && showOptionMenu?.mealId === meal.id && (
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-[60] bg-white rounded-xl shadow-2xl border-2 border-slate-200 py-2 w-36 overflow-hidden animate-in fade-in zoom-in duration-200 origin-top">
-                          <div className="px-3 pb-1 mb-1 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase">
-                            Choisir option
-                          </div>
-                          <button
-                            onClick={() => handleOptionSelect('Viande')}
-                            className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center justify-between"
-                          >
-                            Viande
-                            <span className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center text-xs">V</span>
-                          </button>
-                          <button
-                            onClick={() => handleOptionSelect('Poisson')}
-                            className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center justify-between border-t border-slate-50"
-                          >
-                            Poisson
-                            <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xs">P</span>
-                          </button>
-                          <button
-                            onClick={() => setShowOptionMenu(null)}
-                            className="w-full px-4 py-2 text-center text-[10px] font-black text-slate-400 hover:text-red-500 transition-colors border-t border-slate-50"
-                          >
-                            ANNULER
-                          </button>
-                        </div>
-                      )}
+                      {showOptionMenu?.employeeId === employee.id && showOptionMenu?.mealId === meal.id && 
+                        createPortal(
+                          <>
+                            {/* Backdrop */}
+                            <div 
+                              className="fixed inset-0 z-[100] bg-slate-900/10 backdrop-blur-[2px]" 
+                              onClick={() => setShowOptionMenu(null)}
+                            />
+                            {/* Modal positioned via fixed coordinates */}
+                            <div 
+                              className={`fixed z-[101] bg-white rounded-xl shadow-2xl border-2 border-slate-200 py-2 w-36 overflow-hidden animate-in fade-in zoom-in duration-200 ${
+                                showOptionMenu.y < 200 ? 'slide-in-from-top-2' : 'slide-in-from-bottom-2'
+                              }`}
+                              style={{ 
+                                left: Math.min(window.innerWidth - 150, Math.max(10, showOptionMenu.x - 72)),
+                                top: showOptionMenu.y < 200 
+                                  ? showOptionMenu.y + 55 
+                                  : showOptionMenu.y - 155
+                              }}
+                            >
+                              <div className="px-3 pb-1 mb-1 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase">
+                                Choisir option
+                              </div>
+                              <button
+                                onClick={() => handleOptionSelect('Viande')}
+                                className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-orange-50 hover:text-orange-600 transition-colors flex items-center justify-between"
+                              >
+                                Viande
+                                <span className="w-6 h-6 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center text-xs">V</span>
+                              </button>
+                              <button
+                                onClick={() => handleOptionSelect('Poisson')}
+                                className="w-full px-4 py-3 text-left text-sm font-black text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors flex items-center justify-between border-t border-slate-50"
+                              >
+                                Poisson
+                                <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-xs">P</span>
+                              </button>
+                              <button
+                                onClick={() => setShowOptionMenu(null)}
+                                className="w-full px-4 py-2 text-center text-[10px] font-black text-slate-400 hover:text-red-500 transition-colors border-t border-slate-50"
+                              >
+                                ANNULER
+                              </button>
+                            </div>
+                          </>,
+                          document.body
+                        )
+                      }
                     </div>
                   </td>
                 );
