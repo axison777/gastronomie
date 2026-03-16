@@ -6,6 +6,7 @@ import Summary from './components/Summary';
 import Countdown from './components/Countdown';
 import AdminDashboard from './components/AdminDashboard';
 import ExportModal from './components/ExportModal';
+import AdminLoginModal from './components/AdminLoginModal';
 
 function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -19,6 +20,8 @@ function App() {
   const [selectedDept, setSelectedDept] = useState<string>('All');
   const [config, setConfig] = useState<Config | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -272,8 +275,14 @@ function App() {
             </div>
             <div className="flex items-center gap-4">
               <button
-                onClick={() => setIsAdminOpen(true)}
-                className="p-3 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all"
+                onClick={() => {
+                  if (isAuthenticated) {
+                    setIsAdminOpen(true);
+                  } else {
+                    setIsAdminLoginModalOpen(true);
+                  }
+                }}
+                className={`p-3 rounded-2xl transition-all ${isAuthenticated ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
                 title="Administration"
               >
                 <Settings size={24} />
@@ -399,7 +408,10 @@ function App() {
           meals={meals}
           config={config}
           onDataUpdate={loadData}
-          onClose={() => setIsAdminOpen(false)}
+          onClose={() => {
+            setIsAdminOpen(false);
+            setIsAuthenticated(false);
+          }}
         />
       )}
       {isExportOpen && (
@@ -410,6 +422,17 @@ function App() {
           onClose={() => setIsExportOpen(false)}
         />
       )}
+
+      <AdminLoginModal 
+        isOpen={isAdminLoginModalOpen}
+        onClose={() => setIsAdminLoginModalOpen(false)}
+        correctPassword={config?.admin_password}
+        onSuccess={() => {
+          setIsAdminLoginModalOpen(false);
+          setIsAuthenticated(true);
+          setIsAdminOpen(true);
+        }}
+      />
     </div>
   );
 }

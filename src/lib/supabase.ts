@@ -34,4 +34,5 @@ export interface Settings {
   id: string;
   lock_time: string;
   last_publish_date: string | null;
+  admin_password?: string;
 }

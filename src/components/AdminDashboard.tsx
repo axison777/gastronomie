@@ -24,6 +24,8 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
   const [showNewMealForm, setShowNewMealForm] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [newLockTime, setNewLockTime] = useState(config?.lock_time || '18:00');
+  const [newPassword, setNewPassword] = useState(config?.admin_password || '');
+  const [showPassword, setShowPassword] = useState(false);
   const [modalConfig, setModalConfig] = useState<{
     isOpen: boolean;
     title: string;
@@ -302,7 +304,10 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
 
   const handleUpdateSettings = async () => {
     try {
-      await supabase.from('settings').update({ lock_time: newLockTime }).eq('id', 'config');
+      await supabase.from('settings').update({ 
+        lock_time: newLockTime,
+        admin_password: newPassword
+      }).eq('id', 'config');
       onDataUpdate();
       setModalConfig({
         isOpen: true,
@@ -655,7 +660,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                   Verrouillage Automatique
                 </h3>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-2">
                       Heure de clôture des commandes
@@ -671,10 +676,36 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
                     </p>
                   </div>
 
+                  <div className="pt-6 border-t border-indigo-100">
+                    <label className="block text-sm font-bold text-slate-600 mb-2">
+                      Mot de passe Administrateur
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={newPassword}
+                        onChange={e => setNewPassword(e.target.value)}
+                        placeholder="Nouveau mot de passe"
+                        className="w-full px-6 py-4 rounded-2xl border-2 border-white bg-white shadow-sm focus:border-indigo-300 outline-none text-lg font-bold text-slate-700 pr-14"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-indigo-600 transition-colors"
+                      >
+                        {showPassword ? <X size={20} /> : <SettingsIcon size={20} />}
+                      </button>
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+                      Ce mot de passe sera demandé pour accéder à cette interface. Par défaut : <strong>1234</strong>.
+                    </p>
+                  </div>
+
                   <button
                     onClick={handleUpdateSettings}
-                    className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all transform hover:-translate-y-1 mt-4"
+                    className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all transform hover:-translate-y-1 mt-4 flex items-center justify-center gap-2"
                   >
+                    <Save size={20} />
                     Enregistrer les paramètres
                   </button>
                 </div>
