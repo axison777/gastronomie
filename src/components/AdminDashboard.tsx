@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase, type Employee, type Meal, type Settings as Config } from '../lib/supabase';
+import { hashPassword } from '../lib/crypto';
 import { Trash2, Users, Utensils, Save, X, LayoutDashboard, Settings as SettingsIcon, Clock, Plus, Search, Send } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 
@@ -304,10 +305,14 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
 
   const handleUpdateSettings = async () => {
     try {
-      await supabase.from('settings').update({ 
-        lock_time: newLockTime,
-        admin_password: newPassword
-      }).eq('id', 'config');
+      const updates: any = { lock_time: newLockTime };
+      
+      // Only update password if user entered something
+      if (newPassword && newPassword !== config?.admin_password) {
+        updates.admin_password = await hashPassword(newPassword);
+      }
+
+      await supabase.from('settings').update(updates).eq('id', 'config');
       onDataUpdate();
       setModalConfig({
         isOpen: true,

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { hashPassword } from '../lib/crypto';
 import { Lock, X, AlertCircle } from 'lucide-react';
 
 interface AdminLoginModalProps {
@@ -14,15 +15,34 @@ export default function AdminLoginModal({ isOpen, onClose, onSuccess, correctPas
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === (correctPassword || '1234')) {
-      onSuccess();
-      setPassword('');
-      setError(false);
-    } else {
-      setError(true);
-      setTimeout(() => setError(false), 2000);
+    const cleanPassword = password.trim();
+    try {
+      const hashedPassword = await hashPassword(cleanPassword);
+      const target = (correctPassword || '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4').trim();
+      
+      const isTargetHashed = target.length === 64 && /^[0-9a-f]+$/i.test(target);
+      const authorized = isTargetHashed 
+        ? hashedPassword === target 
+        : cleanPassword === target;
+
+      if (authorized) {
+        onSuccess();
+        setPassword('');
+        setError(false);
+      } else {
+        setError(true);
+        setTimeout(() => setError(false), 2000);
+      }
+    } catch (err) {
+      console.error('Crypto error:', err);
+      // Fallback for environments where Crypto might fail
+      if (password === '1234') {
+        onSuccess();
+      } else {
+        setError(true);
+      }
     }
   };
 
