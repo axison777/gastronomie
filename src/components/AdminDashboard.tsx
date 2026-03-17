@@ -163,7 +163,7 @@ export default function AdminDashboard({ employees, meals, config, onDataUpdate,
       onConfirm: async () => {
         setIsPublishing(true);
         try {
-          const today = new Date().toISOString().split('T')[0];
+          const today = new Date().toLocaleDateString('en-CA');
           
           // 1. Mettre à jour la date de publication (déverrouille l'app)
           const { error: settingsError } = await supabase

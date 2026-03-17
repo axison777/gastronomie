@@ -23,8 +23,12 @@ function App() {
   const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  const getTodayStr = () => new Date().toLocaleDateString('en-CA');
+
   useEffect(() => {
     loadData();
+    const refreshInterval = setInterval(loadData, 30000); // 30s secondary fallback
+    return () => clearInterval(refreshInterval);
   }, []);
 
   useEffect(() => {
@@ -32,7 +36,7 @@ function App() {
       if (!config) return;
 
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = getTodayStr();
       
       if (config.last_publish_date !== today) {
         setIsLocked(true);
@@ -43,11 +47,11 @@ function App() {
       const lockDate = new Date();
       lockDate.setHours(lockH, lockM, 0, 0);
 
-      setIsLocked(now > lockDate);
+      setIsLocked(now >= lockDate);
     };
 
     check();
-    const interval = setInterval(check, 1000 * 30); // Check every 30 seconds
+    const interval = setInterval(check, 1000); // Tighter check
     return () => clearInterval(interval);
   }, [config]);
 
@@ -126,7 +130,7 @@ function App() {
         supabase
           .from('orders')
           .select('*')
-          .eq('order_date', new Date().toISOString().split('T')[0]),
+          .eq('order_date', new Date().toLocaleDateString('en-CA')),
         supabase.from('settings').select('*').eq('id', 'config').single(),
       ]);
 
@@ -175,7 +179,7 @@ function App() {
           .insert({
             employee_id: employeeId,
             meal_id: mealId,
-            order_date: new Date().toISOString().split('T')[0],
+            order_date: new Date().toLocaleDateString('en-CA'),
             protein_option: option
           })
           .select()
@@ -312,7 +316,7 @@ function App() {
               <div>
                 <p className="text-slate-700 font-bold">Plateforme Verrouillée</p>
                 <p className="text-slate-500 text-sm">
-                  {config?.last_publish_date !== new Date().toISOString().split('T')[0]
+                  {config?.last_publish_date !== getTodayStr()
                     ? "En attente de la publication du menu par la restauratrice." 
                     : "L'heure limite de commande est dépassée."}
                 </p>
