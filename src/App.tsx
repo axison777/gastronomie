@@ -222,6 +222,9 @@ function App() {
       fullMessage += `\n*Total ${site}: ${siteOrders.length} plats*\n\n`;
     });
 
+    const grandTotal = orders.length;
+    fullMessage += `📊 *TOTAL GÉNÉRAL : ${grandTotal} REPAS*`;
+
     const encodedMessage = encodeURIComponent(fullMessage);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
