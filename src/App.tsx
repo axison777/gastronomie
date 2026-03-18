@@ -65,8 +65,8 @@ function App() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             const newOrder = payload.new as Order;
-            const today = new Date().toISOString().split('T')[0];
-            if (newOrder.order_date === today) {
+            const activeDate = config?.last_publish_date || new Date().toLocaleDateString('en-CA');
+            if (newOrder.order_date === activeDate) {
               setOrders((current) => {
                 if (current.some(o => o.id === newOrder.id)) return current;
                 return [...current, newOrder];
@@ -119,24 +119,26 @@ function App() {
       supabase.removeChannel(settingsSubscription);
       supabase.removeChannel(mealsSubscription);
     };
-  }, []);
-
+  }, [config?.last_publish_date]);
 
   const loadData = async () => {
     try {
-      const [employeesRes, mealsRes, ordersRes, configRes] = await Promise.all([
+      const configRes = await supabase.from('settings').select('*').eq('id', 'config').single();
+      const currentConfig = configRes.data;
+      if (currentConfig) {
+        setConfig(currentConfig);
+      }
+
+      const activeDate = currentConfig?.last_publish_date || new Date().toLocaleDateString('en-CA');
+
+      const [employeesRes, mealsRes, ordersRes] = await Promise.all([
         supabase.from('employees').select('*').order('name'),
         supabase.from('meals').select('*').order('name'),
         supabase
           .from('orders')
           .select('*')
-          .eq('order_date', new Date().toLocaleDateString('en-CA')),
-        supabase.from('settings').select('*').eq('id', 'config').single(),
+          .eq('order_date', activeDate),
       ]);
-
-      if (configRes.data) {
-        setConfig(configRes.data);
-      }
 
       if (employeesRes.data) {
         // Tri par Site, puis par Département, puis par Nom
@@ -179,7 +181,7 @@ function App() {
           .insert({
             employee_id: employeeId,
             meal_id: mealId,
-            order_date: new Date().toLocaleDateString('en-CA'),
+            order_date: config?.last_publish_date || new Date().toLocaleDateString('en-CA'),
             protein_option: option
           })
           .select()
