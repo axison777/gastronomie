@@ -7,6 +7,9 @@ import Countdown from './components/Countdown';
 import AdminDashboard from './components/AdminDashboard';
 import ExportModal from './components/ExportModal';
 import AdminLoginModal from './components/AdminLoginModal';
+import MaintenanceView from './components/MaintenanceView';
+
+const IS_MAINTENANCE = true; // Activer/désactiver le mode maintenance
 
 function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -26,12 +29,17 @@ function App() {
   const getTodayStr = () => new Date().toLocaleDateString('en-CA');
 
   useEffect(() => {
+    if (IS_MAINTENANCE) {
+      setLoading(false);
+      return;
+    }
     loadData();
     const refreshInterval = setInterval(loadData, 30000); // 30s secondary fallback
     return () => clearInterval(refreshInterval);
   }, []);
 
   useEffect(() => {
+    if (IS_MAINTENANCE) return;
     const check = () => {
       if (!config) return;
 
@@ -57,6 +65,7 @@ function App() {
 
   // Realtime Subscriptions
   useEffect(() => {
+    if (IS_MAINTENANCE) return;
     const ordersSubscription = supabase
       .channel('public:orders')
       .on(
@@ -234,6 +243,10 @@ function App() {
     const encodedMessage = encodeURIComponent(fullMessage);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
+
+  if (IS_MAINTENANCE) {
+    return <MaintenanceView />;
+  }
 
   if (loading) {
     return (
