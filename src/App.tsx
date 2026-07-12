@@ -21,6 +21,14 @@ const getFormattedDate = () => {
   return dateStr.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
+const getTodayStr = () => {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [meals, setMeals] = useState<Meal[]>([]);
