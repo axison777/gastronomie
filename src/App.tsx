@@ -10,6 +10,7 @@ import Countdown from './components/Countdown';
 import AdminDashboard from './components/AdminDashboard';
 import ExportModal from './components/ExportModal';
 import MaintenanceView from './components/MaintenanceView';
+import AdminLoginModal from './components/AdminLoginModal';
 
 const IS_MAINTENANCE = false;
 
