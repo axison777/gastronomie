@@ -27,6 +27,7 @@ function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAdminLoginModalOpen, setIsAdminLoginModalOpen] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sites, setSites] = useState<Site[]>([]);
