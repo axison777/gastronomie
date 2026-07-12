@@ -11,6 +11,8 @@ import AdminDashboard from './components/AdminDashboard';
 import ExportModal from './components/ExportModal';
 import MaintenanceView from './components/MaintenanceView';
 
+const IS_MAINTENANCE = false;
+
 const getFormattedDate = () => {
   const options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' };
   const dateStr = new Date().toLocaleDateString('fr-FR', options);
