@@ -14,7 +14,8 @@ export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownPro
       const now = new Date();
       const target = new Date();
       
-      const [hoursLimit, minutesLimit] = lockTime.split(':').map(Number);
+      const [timePart] = lockTime.split('|');
+      const [hoursLimit, minutesLimit] = timePart.split(':').map(Number);
       target.setHours(hoursLimit || 18, minutesLimit || 0, 0, 0);
 
       if (now >= target) {
@@ -41,32 +42,19 @@ export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownPro
 
   return (
     <div
-      className={`flex items-center gap-4 px-6 py-3 rounded-2xl shadow-sm transition-all border-2 ${
+      className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all shadow-sm ${
         isLocked
-          ? 'bg-slate-50 border-slate-200'
-          : 'bg-indigo-50 border-indigo-200 animate-pulse-subtle'
+          ? 'bg-gray-200 text-gray-600 border border-gray-300'
+          : 'bg-orange-700 text-white'
       }`}
     >
       <Clock
-        className={isLocked ? 'text-slate-400' : 'text-indigo-600'}
-        size={24}
+        className={isLocked ? 'text-gray-500' : 'text-white'}
+        size={16}
       />
-      <div>
-        <p
-          className={`text-[10px] font-bold uppercase tracking-wider ${
-            isLocked ? 'text-slate-500' : 'text-indigo-500'
-          }`}
-        >
-          {isLocked ? 'Session Clôturée' : 'Fin des commandes'}
-        </p>
-        <p
-          className={`text-2xl font-black tabular-nums ${
-            isLocked ? 'text-slate-400' : 'text-indigo-700'
-          }`}
-        >
-          {timeLeft}
-        </p>
-      </div>
+      <span className="tracking-tight">
+        {isLocked ? 'Session Clôturée' : `Clôture dans ${timeLeft}`}
+      </span>
     </div>
   );
 }

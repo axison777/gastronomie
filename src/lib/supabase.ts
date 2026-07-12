@@ -5,12 +5,32 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export interface Employee {
+export interface Site {
   id: string;
   name: string;
-  site?: string;
-  department?: string;
+  address?: string;
   created_at: string;
+}
+
+export interface Department {
+  id: string;
+  site_id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface Employee {
+  id: string;
+  first_name: string;
+  last_name: string;
+  site_id?: string;
+  department_id?: string;
+  is_active: boolean;
+  created_at: string;
+  
+  // Relations issues des requêtes jointes
+  site?: { name: string };
+  department?: { name: string };
 }
 
 export interface Meal {
@@ -19,6 +39,7 @@ export interface Meal {
   created_at: string;
   has_options?: boolean;
   is_active?: boolean;
+  image_url?: string;
 }
 
 export interface Order {
@@ -34,4 +55,8 @@ export interface Settings {
   id: string;
   lock_time: string;
   last_publish_date: string | null;
+  timezone?: string;
+  maintenance_message?: string | null;
+  whatsapp_prefix?: string;
+  whatsapp_number?: string | null;
 }
