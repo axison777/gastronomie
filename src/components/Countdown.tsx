@@ -11,6 +11,11 @@ export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownPro
 
   useEffect(() => {
     const updateCountdown = () => {
+      if (isLocked) {
+        setTimeLeft('Fermé');
+        return;
+      }
+
       const now = new Date();
       const target = new Date();
       
@@ -38,7 +43,7 @@ export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownPro
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [lockTime]);
+  }, [lockTime, isLocked]);
 
   return (
     <div

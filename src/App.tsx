@@ -35,15 +35,22 @@ function App() {
   const [activeView, setActiveView] = useState<'orders' | 'summary'>('orders');
 
   useEffect(() => {
+    if (IS_MAINTENANCE) {
+      setLoading(false);
+      return;
+    }
     loadData();
+    const refreshInterval = setInterval(loadData, 30000); // 30s secondary fallback
+    return () => clearInterval(refreshInterval);
   }, []);
 
   useEffect(() => {
+    if (IS_MAINTENANCE) return;
     const check = () => {
       if (!config) return;
 
       const now = new Date();
-      const today = now.toISOString().split('T')[0];
+      const today = getTodayStr();
       
       if (config.last_publish_date !== today) {
         setIsLocked(true);
@@ -55,16 +62,17 @@ function App() {
       const lockDate = new Date();
       lockDate.setHours(lockH, lockM, 0, 0);
 
-      setIsLocked(now > lockDate);
+      setIsLocked(now >= lockDate);
     };
 
     check();
-    const interval = setInterval(check, 1000 * 30); // Check every 30 seconds
+    const interval = setInterval(check, 1000); // Tighter check
     return () => clearInterval(interval);
   }, [config]);
 
   // Realtime Subscriptions
   useEffect(() => {
+    if (IS_MAINTENANCE) return;
     const ordersSubscription = supabase
       .channel('public:orders')
       .on(
@@ -124,8 +132,7 @@ function App() {
       supabase.removeChannel(settingsSubscription);
       supabase.removeChannel(mealsSubscription);
     };
-  }, []);
-
+  }, [config?.last_publish_date]);
 
   const loadData = async () => {
     try {
@@ -270,6 +277,10 @@ function App() {
     const encodedMessage = encodeURIComponent(fullMessage);
     window.open(`https://wa.me/?text=${encodedMessage}`, '_blank');
   };
+
+  if (IS_MAINTENANCE) {
+    return <MaintenanceView />;
+  }
 
   if (loading) {
     return (
@@ -604,6 +615,17 @@ function App() {
           onClose={() => setIsExportOpen(false)}
         />
       )}
+
+      <AdminLoginModal 
+        isOpen={isAdminLoginModalOpen}
+        onClose={() => setIsAdminLoginModalOpen(false)}
+        correctPassword={config?.admin_password}
+        onSuccess={() => {
+          setIsAdminLoginModalOpen(false);
+          setIsAuthenticated(true);
+          setIsAdminOpen(true);
+        }}
+      />
     </div>
   );
 }
