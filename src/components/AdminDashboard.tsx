@@ -1296,23 +1296,26 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
                   {/* Edit / Delete actions — bottom of card */}
                   <div
-                    className="flex justify-between items-center pt-3 border-t border-gray-200/50 relative z-10"
+                    className="flex justify-end items-center gap-2 pt-3 border-t border-gray-200/50 relative z-10"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
                       type="button"
                       onClick={() => openEditSiteModal(site)}
-                      className="text-orange-700 hover:underline text-[10px] font-bold"
+                      title="Modifier le site"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors text-xs font-bold"
                     >
+                      <FileText size={14} />
                       Modifier
                     </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteSite(site)}
-                      className="text-gray-400 hover:text-red-500 transition-colors p-1"
                       title="Supprimer le site"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors text-xs font-bold"
                     >
-                      <Trash2 size={13} />
+                      <Trash2 size={14} />
+                      Supprimer
                     </button>
                   </div>
                 </div>
@@ -1377,21 +1380,24 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     </div>
 
                     {/* Edit / Delete actions — bottom of card */}
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-200/50">
+                    <div className="flex justify-end items-center gap-2 pt-3 border-t border-gray-200/50">
                       <button
                         type="button"
                         onClick={() => openEditDepartmentModal(dept)}
-                        className="text-orange-700 hover:underline text-[10px] font-bold"
+                        title="Modifier le département"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors text-xs font-bold"
                       >
+                        <FileText size={14} />
                         Modifier
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteDepartment(dept)}
-                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
                         title="Supprimer le département"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors text-xs font-bold"
                       >
-                        <Trash2 size={13} />
+                        <Trash2 size={14} />
+                        Supprimer
                       </button>
                     </div>
                   </div>
@@ -1529,8 +1535,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200/50 pb-6 mb-6">
           {activeTab === 'meals' ? (
             <div>
-              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Menu & Dishes</h2>
-              <p className="text-xs font-semibold text-gray-400 mt-1">Manage daily offerings and the dish library.</p>
+              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Menu & Plats</h2>
+              <p className="text-xs font-semibold text-gray-400 mt-1">Gérez les plats du jour et votre bibliothèque culinaire.</p>
             </div>
           ) : activeTab === 'sites' ? (
             <div>
@@ -1542,9 +1548,14 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
               <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Collaborateurs</h2>
               <p className="text-xs font-semibold text-gray-400 mt-1">Gérez les membres de l'équipe, leurs sites et départements.</p>
             </div>
+          ) : activeTab === 'settings' ? (
+            <div>
+              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Paramètres généraux</h2>
+              <p className="text-xs font-semibold text-gray-400 mt-1">Gérez la configuration globale de votre plateforme.</p>
+            </div>
           ) : (
             <div>
-              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Bonjour Admin</h2>
+              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Tableau de bord</h2>
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-500 mt-1">
                 <Calendar size={16} className="text-gray-400" />
                 <span>{getFormattedDate()}</span>
@@ -1595,6 +1606,16 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                   Ajouter un employé
                 </button>
               </div>
+            ) : activeTab === 'settings' ? (
+              <button
+                type="button"
+                onClick={() => handleUpdateSettings(true)}
+                disabled={isSavingSettings}
+                className="flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
+              >
+                <Save size={16} />
+                {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
+              </button>
             ) : (
               <>
                 <button
@@ -1681,16 +1702,32 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     </span>
                   </div>
                   
-                  {/* Search Bar aligned with the title line */}
-                  <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                    <input
-                      type="text"
-                      placeholder="Rechercher un plat..."
-                      value={mealSearchTerm}
-                      onChange={(e) => setMealSearchTerm(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium shadow-sm transition-all"
-                    />
+                  {/* Search Bar + Reset aligned */}
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-80">
+                      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                      <input
+                        type="text"
+                        placeholder="Rechercher un plat..."
+                        value={mealSearchTerm}
+                        onChange={(e) => setMealSearchTerm(e.target.value)}
+                        className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium shadow-sm transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={async () => {
+                        const activeMeals = meals.filter(m => m.is_active);
+                        for (const meal of activeMeals) {
+                          await supabase.from('meals').update({ is_active: false }).eq('id', meal.id);
+                        }
+                        onDataUpdate();
+                      }}
+                      title="Réinitialiser la sélection"
+                      className="flex items-center gap-1.5 bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-red-500 hover:border-red-300 px-3 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-colors shrink-0"
+                    >
+                      <X size={14} />
+                      Réinitialiser
+                    </button>
                   </div>
                 </div>
 
@@ -1877,11 +1914,11 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="text-[#8C867A] text-[10px] font-extrabold uppercase tracking-wider border-b border-[#E4E3DB]">
-                          <th className="pl-8 pr-4 py-4 font-bold">Nom complet</th>
-                          <th className="px-4 py-4 font-bold">Site assigné</th>
-                          <th className="px-4 py-4 font-bold">Département</th>
-                          <th className="px-4 py-4 font-bold">Statut</th>
-                          <th className="pr-8 pl-4 py-4 font-bold text-right">Actions</th>
+                          <th className="pl-8 pr-6 py-5 font-bold">Nom complet</th>
+                          <th className="px-6 py-5 font-bold">Site assigné</th>
+                          <th className="px-6 py-5 font-bold">Département</th>
+                          <th className="px-6 py-5 font-bold">Statut</th>
+                          <th className="pr-8 pl-6 py-5 font-bold text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-[#E4E3DB]">
@@ -1905,7 +1942,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                             return (
                               <tr key={emp.id} className={`transition-colors ${isActive ? 'hover:bg-gray-50/40' : 'opacity-50 bg-gray-50/60'}`}>
                                 {/* Name with initials avatar */}
-                                <td className="pl-8 pr-4 py-4 flex items-center gap-3">
+                                <td className="pl-8 pr-6 py-5 flex items-center gap-3">
                                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shadow-xs overflow-hidden shrink-0 border ${
                                     isActive ? 'bg-[#E4E3DB] text-gray-500 border-gray-305' : 'bg-gray-200 text-gray-400 border-gray-200'
                                   }`}>
@@ -1922,14 +1959,14 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                 </td>
 
                                 {/* Assigned Site */}
-                                <td className="px-4 py-4 text-xs font-bold text-gray-700">
+                                <td className="px-6 py-5 text-sm font-semibold text-gray-700">
                                   {siteText}
                                 </td>
 
                                 {/* Assigned Dept */}
-                                <td className="px-4 py-4">
+                                <td className="px-6 py-5">
                                   {deptName ? (
-                                    <span className={`px-2.5 py-1 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${deptBadgeStyle}`}>
+                                    <span className={`px-3 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${deptBadgeStyle}`}>
                                       {deptName}
                                     </span>
                                   ) : (
@@ -1938,7 +1975,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                 </td>
 
                                 {/* Status toggle */}
-                                <td className="px-4 py-4">
+                                <td className="px-6 py-5">
                                   <label className="relative inline-flex items-center cursor-pointer select-none">
                                     <input 
                                       type="checkbox" 
@@ -1951,7 +1988,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                 </td>
 
                                 {/* Actions (Edit / Delete) */}
-                                <td className="pr-8 pl-4 py-4 text-right">
+                                <td className="pr-8 pl-6 py-5 text-right">
                                   <div className="flex items-center justify-end gap-2">
                                     <button 
                                       onClick={() => {
@@ -1966,9 +2003,10 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                         });
                                         setIsEmployeeDrawerOpen(true);
                                       }}
-                                      className="text-orange-700 hover:text-orange-900 text-xs font-bold mr-2 hover:underline"
+                                      title="Modifier l'employé"
+                                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
                                     >
-                                      Modifier
+                                      <FileText size={14} />
                                     </button>
                                     <button 
                                       onClick={() => handleDeleteEmployee(emp.id, fullName)} 
@@ -2007,24 +2045,6 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
         {activeTab === 'settings' && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto py-2">
-            {/* Header info */}
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h2 className="text-3xl font-extrabold text-[#BD4F19] tracking-tight">Paramètres généraux</h2>
-                <p className="text-xs text-gray-500 font-semibold mt-1">
-                  Gérez la configuration globale de votre plateforme de restauration.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => handleUpdateSettings(true)}
-                disabled={isSavingSettings}
-                className="flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
-              >
-                <Save size={16} />
-                {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
-              </button>
-            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Card 1: Système & Clôture */}

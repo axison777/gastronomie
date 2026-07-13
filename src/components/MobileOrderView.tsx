@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, Search, SlidersHorizontal, X, BarChart2 } from 'lucide-react';
-import type { Employee, Meal, Order } from '../lib/supabase';
+import type { Employee, Meal, Order, Site, Department } from '../lib/supabase';
 import { getEmployeeDeptName, getEmployeeFullName } from '../lib/employeeUtils';
 
 interface MobileOrderViewProps {
@@ -11,6 +11,12 @@ interface MobileOrderViewProps {
   activeView: 'orders' | 'summary';
   onViewChange: (view: 'orders' | 'summary') => void;
   onCellClick: (employeeId: string, mealId: string, option: 'Viande' | 'Poisson' | null) => void;
+  sites: Site[];
+  departments: Department[];
+  selectedSite: string;
+  selectedDept: string;
+  onSiteChange: (site: string) => void;
+  onDeptChange: (dept: string) => void;
 }
 
 const getMealImage = (name: string) => {
@@ -45,10 +51,17 @@ export default function MobileOrderView({
   activeView,
   onViewChange,
   onCellClick,
+  sites,
+  departments,
+  selectedSite,
+  selectedDept,
+  onSiteChange,
+  onDeptChange,
 }: MobileOrderViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [pendingOrder, setPendingOrder] = useState<{ mealId: string; option: 'Viande' | 'Poisson' | null } | null>(null);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
 
   const filteredEmployees = employees.filter(e =>
     e.is_active &&
@@ -149,7 +162,14 @@ export default function MobileOrderView({
               className="w-full pl-11 pr-4 py-3 bg-white border border-[#E4E3DB] rounded-2xl outline-none text-[14px] font-semibold text-gray-700 placeholder-gray-400 shadow-sm"
             />
           </div>
-          <button className="w-11 h-11 flex items-center justify-center bg-white border border-[#E4E3DB] rounded-2xl shadow-sm text-gray-500 shrink-0">
+          <button 
+            onClick={() => setIsFilterSheetOpen(true)}
+            className={`w-11 h-11 flex items-center justify-center border rounded-2xl shadow-sm shrink-0 transition-colors ${
+              selectedSite !== 'All' || selectedDept !== 'All' 
+                ? 'bg-[#BD4F19] border-[#BD4F19] text-white' 
+                : 'bg-white border-[#E4E3DB] text-gray-500'
+            }`}
+          >
             <SlidersHorizontal size={18} />
           </button>
         </div>
@@ -376,6 +396,84 @@ export default function MobileOrderView({
                   Annuler ma commande
                 </button>
               )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Filter Bottom Sheet */}
+      {isFilterSheetOpen && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] transition-opacity" 
+            onClick={() => setIsFilterSheetOpen(false)}
+          />
+          <div className="fixed bottom-0 left-0 right-0 bg-[#F5F4EC] rounded-t-3xl z-[70] flex flex-col shadow-2xl animate-slide-up h-[50vh]">
+            <div className="px-5 py-4 border-b border-[#E4E3DB] flex items-center justify-between shrink-0 bg-white rounded-t-3xl">
+              <h3 className="font-extrabold text-gray-900 text-lg">Filtres</h3>
+              <button 
+                onClick={() => setIsFilterSheetOpen(false)}
+                className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-6">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Bureau (Site)</label>
+                <select
+                  value={selectedSite}
+                  onChange={e => {
+                    onSiteChange(e.target.value);
+                    onDeptChange('All');
+                  }}
+                  className="w-full bg-white border border-[#E4E3DB] rounded-xl px-4 py-3 outline-none text-gray-800 font-medium"
+                >
+                  <option value="All">Tous les bureaux</option>
+                  {sites.map(site => (
+                    <option key={site.id} value={site.name}>{site.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">Département</label>
+                <select
+                  value={selectedDept}
+                  onChange={e => onDeptChange(e.target.value)}
+                  className="w-full bg-white border border-[#E4E3DB] rounded-xl px-4 py-3 outline-none text-gray-800 font-medium"
+                >
+                  <option value="All">Tous les départements</option>
+                  {departments
+                    .filter(d => {
+                      if (selectedSite === 'All') return true;
+                      const siteObj = sites.find(s => s.name === selectedSite);
+                      return siteObj && d.site_id === siteObj.id;
+                    })
+                    .map(dept => (
+                    <option key={dept.id} value={dept.name}>{dept.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 bg-white border-t border-[#E4E3DB] shrink-0 flex gap-3">
+              <button
+                onClick={() => {
+                  onSiteChange('All');
+                  onDeptChange('All');
+                }}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+              >
+                Réinitialiser
+              </button>
+              <button
+                onClick={() => setIsFilterSheetOpen(false)}
+                className="flex-1 py-3 bg-[#BD4F19] text-white font-bold rounded-xl transition-colors"
+              >
+                Appliquer
+              </button>
             </div>
           </div>
         </>

@@ -419,6 +419,12 @@ function App() {
             activeView={activeView}
             onViewChange={setActiveView}
             onCellClick={handleCellClick}
+            sites={sites}
+            departments={departments}
+            selectedSite={selectedSite}
+            selectedDept={selectedDept}
+            onSiteChange={setSelectedSite}
+            onDeptChange={setSelectedDept}
           />
         ) : (
           <MobileSummaryView
