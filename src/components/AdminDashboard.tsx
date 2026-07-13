@@ -8,6 +8,7 @@ import {
   MapPin, Home, Folder, ShieldCheck, MessageSquare
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
+import HistoryReportModal from './HistoryReportModal';
 import { getEmployeeDeptName, getEmployeeFullName, getEmployeeSiteName } from '../lib/employeeUtils';
 
 interface AdminDashboardProps {
@@ -104,7 +105,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Tab & UI states
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'sites' | 'employees' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'sites' | 'employees' | 'settings' | 'journal'>('dashboard');
   const [selectedSite, setSelectedSite] = useState<string>(sites[0]?.id ?? '');
 
   useEffect(() => {
@@ -112,6 +113,38 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
       setSelectedSite(sites[0].id);
     }
   }, [sites, selectedSite]);
+
+  // Order History states
+  const [orderHistory, setOrderHistory] = useState<any[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState<any | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+
+  const fetchOrderHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const { data, error } = await supabase
+        .from('order_history')
+        .select('*')
+        .order('publish_date', { ascending: false });
+      if (error) throw error;
+      setOrderHistory(data || []);
+      
+      if (data && data.length > 0 && !selectedHistoryItem) {
+        setSelectedHistoryItem(data[0]);
+      }
+    } catch (e) {
+      console.error('Error fetching order history:', e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'journal' || activeTab === 'dashboard') {
+      fetchOrderHistory();
+    }
+  }, [activeTab]);
 
   // Site/Dept Creation modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -416,25 +449,43 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
       title: 'Purger tout l’historique ?',
       message: (
         <span>
-          Cette action est <strong className="text-[#BD4F19] font-extrabold">irréversible</strong>. Toutes les commandes enregistrées dans la base de données seront définitivement supprimées.
+          Cette action est <strong className="text-[#BD4F19] font-extrabold">irréversible</strong>. Toutes les commandes actives ainsi que l'intégralité du journal des commandes seront définitivement supprimées de la base de données.
         </span>
       ),
       type: 'danger',
       confirmText: 'Oui, purger',
       onConfirm: async () => {
         try {
-          await supabase.from('orders').delete().neq('id', 'placeholder');
+          // Delete active orders
+          const { error: errorOrders } = await supabase.from('orders').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          if (errorOrders) throw errorOrders;
+
+          // Delete order history journal
+          const { error: errorHistory } = await supabase.from('order_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          if (errorHistory) throw errorHistory;
+
           onDataUpdate();
+          fetchOrderHistory(); // Refresh order history list
+          setSelectedHistoryItem(null); // Reset selection
+
           setModalConfig({
             isOpen: true,
             title: 'Purge réussie ✓',
-            message: 'Toutes les commandes ont été effacées avec succès.',
+            message: 'Le journal et l\'historique des commandes ont été effacés avec succès.',
             type: 'alert',
             confirmText: 'Parfait',
             onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
           });
-        } catch (err) {
+        } catch (err: any) {
           console.error(err);
+          setModalConfig({
+            isOpen: true,
+            title: 'Erreur lors de la purge',
+            message: err.message || 'Une erreur inconnue est survenue.',
+            type: 'danger',
+            confirmText: 'Compris',
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+          });
         }
       }
     });
@@ -694,7 +745,46 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
       onConfirm: async () => {
         setIsPublishing(true);
         try {
+          // 1. Aggregate current orders by meal, option, and site
+          const mealDetailsMap: Record<string, { meal_name: string, protein_option: 'Viande' | 'Poisson' | null, site_name: string, count: number }> = {};
+          let totalOrdersCount = 0;
+
+          orders.forEach(order => {
+            const meal = meals.find(m => m.id === order.meal_id);
+            if (!meal) return;
+
+            const employee = employees.find(e => e.id === order.employee_id);
+            const siteName = employee ? getEmployeeSiteName(employee) : 'Bureau 1';
+
+            const key = `${order.meal_id}_${order.protein_option || 'None'}_${siteName}`;
+            if (mealDetailsMap[key]) {
+              mealDetailsMap[key].count += 1;
+            } else {
+              mealDetailsMap[key] = {
+                meal_name: meal.name,
+                protein_option: order.protein_option || null,
+                site_name: siteName,
+                count: 1
+              };
+            }
+            totalOrdersCount += 1;
+          });
+
+          const detailsList = Object.values(mealDetailsMap);
           const today = new Date().toISOString().split('T')[0];
+
+          if (totalOrdersCount > 0) {
+            const { error: historyError } = await supabase
+              .from('order_history')
+              .insert({
+                publish_date: today,
+                total_orders: totalOrdersCount,
+                details: detailsList
+              });
+
+            if (historyError) throw historyError;
+          }
+
           const { error: settingsError } = await supabase
             .from('settings')
             .update({ last_publish_date: today })
@@ -710,6 +800,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
           if (ordersError) throw ordersError;
 
           onDataUpdate();
+          fetchOrderHistory(); // Refresh order history list
+          setActiveTab('meals'); // Redirect to Menu & Plats tab
           setModalConfig(prev => ({ ...prev, isOpen: false }));
         } catch (e: any) {
           console.error(e);
@@ -1410,6 +1502,232 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     );
   };
 
+  const renderJournal = () => {
+    const siteTotals: Record<string, number> = {};
+    // Initialize all sites from the configured sites props
+    sites.forEach(s => {
+      siteTotals[s.name] = 0;
+    });
+    
+    if (selectedHistoryItem && selectedHistoryItem.details) {
+      selectedHistoryItem.details.forEach((detail: any) => {
+        const site = detail.site_name || 'Bureau 1';
+        siteTotals[site] = (siteTotals[site] || 0) + detail.count;
+      });
+    }
+    
+    const uniqueSitesInItem = sites.map(s => s.name);
+
+    // Group meals for table
+    const mealGroups: Record<string, {
+      meal_name: string;
+      options: Record<string, number>;
+      siteCounts: Record<string, number>;
+      total: number;
+    }> = {};
+
+    if (selectedHistoryItem && selectedHistoryItem.details) {
+      selectedHistoryItem.details.forEach((detail: any) => {
+        const name = detail.meal_name;
+        const site = detail.site_name || 'Bureau 1';
+        
+        if (!mealGroups[name]) {
+          mealGroups[name] = {
+            meal_name: name,
+            options: {},
+            siteCounts: {},
+            total: 0
+          };
+        }
+        
+        if (detail.protein_option) {
+          mealGroups[name].options[detail.protein_option] = (mealGroups[name].options[detail.protein_option] || 0) + detail.count;
+        }
+        
+        mealGroups[name].siteCounts[site] = (mealGroups[name].siteCounts[site] || 0) + detail.count;
+        mealGroups[name].total += detail.count;
+      });
+    }
+
+    const sortedMealGroups = Object.values(mealGroups).sort((a, b) => a.meal_name.localeCompare(b.meal_name));
+
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300">
+        {isLoadingHistory ? (
+          <div className="text-center py-12 text-gray-400 font-semibold bg-white border border-[#E4E3DB] rounded-3xl">Chargement de l'historique...</div>
+        ) : orderHistory.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 italic bg-white border border-[#E4E3DB] rounded-3xl">Aucun historique disponible.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+            {/* List of dates */}
+            <div className="md:col-span-4 flex flex-col gap-4 max-h-[650px] overflow-y-auto bg-gray-50/50 border border-[#E4E3DB] rounded-3xl p-4 shadow-sm">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1 px-1">Dates de publication</span>
+              <div className="flex flex-col gap-3">
+                {orderHistory.map(item => {
+                  const formattedDate = new Date(item.publish_date).toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  });
+                  const isSelected = selectedHistoryItem?.id === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedHistoryItem(item)}
+                      className={`w-full text-left px-5 py-4 rounded-2xl transition-all flex flex-col gap-1 border-2 ${
+                        isSelected 
+                          ? 'bg-[#FCE4D6]/70 border-[#BD4F19] text-[#BD4F19] shadow-sm' 
+                          : 'bg-white border-transparent hover:bg-gray-100/50 text-gray-700 shadow-xs'
+                      }`}
+                    >
+                      <span className="font-extrabold text-sm capitalize leading-tight">
+                        {formattedDate}
+                      </span>
+                      <span className="text-xs text-gray-455 font-semibold">
+                        {item.total_orders} plat{item.total_orders > 1 ? 's' : ''} commandés
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Details Pane */}
+            <div className="md:col-span-8 flex flex-col gap-6 min-h-[300px]">
+              {selectedHistoryItem ? (
+                <>
+                  {/* KPI Cards Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    {/* Total Plats Card */}
+                    <div className="bg-white border border-[#E4E3DB] rounded-3xl p-6 shadow-sm flex items-center gap-4">
+                      <div className="bg-[#FCE4D6] text-[#BD4F19] w-12 h-12 rounded-full flex items-center justify-center shrink-0">
+                        <Utensils size={22} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Plats</span>
+                        <span className="text-2xl font-black text-gray-800">{selectedHistoryItem.total_orders}</span>
+                      </div>
+                    </div>
+
+                    {/* Bureau Cards */}
+                    {uniqueSitesInItem.map((site, index) => {
+                      const colors = [
+                        { bg: 'bg-[#FEF3D6]', text: 'text-[#D97706]' }, // Yellow/Orange
+                        { bg: 'bg-[#E2F0D9]', text: 'text-[#385723]' }, // Green
+                        { bg: 'bg-[#E8F4F8]', text: 'text-[#1F6E8C]' }  // Blue
+                      ];
+                      const color = colors[index % colors.length];
+                      return (
+                        <div key={site} className="bg-white border border-[#E4E3DB] rounded-3xl p-6 shadow-sm flex items-center gap-4">
+                          <div className={`${color.bg} ${color.text} w-12 h-12 rounded-full flex items-center justify-center shrink-0`}>
+                            {index === 0 ? <Building2 size={22} /> : <Home size={22} />}
+                          </div>
+                          <div>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">{site}</span>
+                            <span className="text-2xl font-black text-gray-800">{siteTotals[site] || 0}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Main details table */}
+                  <div className="bg-white border border-[#E4E3DB] rounded-3xl shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-6 border-b border-gray-150 flex items-center justify-between">
+                      <h4 className="font-bold text-gray-900 text-base capitalize">
+                        Détails du {new Date(selectedHistoryItem.publish_date).toLocaleDateString('fr-FR', {
+                          weekday: 'long',
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </h4>
+                      <span className="bg-[#FCE4D6] text-[#BD4F19] text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                        Session Déjeuner
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-gray-50/50 text-[10px] font-extrabold uppercase tracking-wider border-b border-gray-200 text-gray-400">
+                            <th className="px-6 py-4 font-bold">Plat</th>
+                            <th className="px-6 py-4 font-bold">Détail Options</th>
+                            {uniqueSitesInItem.map(site => (
+                              <th key={site} className="px-6 py-4 font-bold text-center">{site.toUpperCase()}</th>
+                            ))}
+                            <th className="px-6 py-4 font-bold text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-150 bg-white">
+                          {sortedMealGroups.map((group, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/40 transition-colors">
+                              <td className="px-6 py-4 text-sm font-extrabold text-gray-800">
+                                {group.meal_name}
+                              </td>
+                              <td className="px-6 py-4 text-xs font-semibold text-gray-500">
+                                {Object.keys(group.options).length > 0 ? (
+                                  <div className="flex items-center gap-3">
+                                    {Object.entries(group.options).map(([optName, optCount]) => (
+                                      <span key={optName} className="inline-flex items-center gap-1.5">
+                                        <span className={`w-5 h-5 flex items-center justify-center rounded text-[9px] font-black text-white ${
+                                          optName === 'Viande' ? 'bg-[#BD4F19]' : 'bg-[#517664]'
+                                        }`}>
+                                          {optName.charAt(0)}
+                                        </span>
+                                        <span className="font-bold text-sm text-gray-800">{optCount}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400">—</span>
+                                )}
+                              </td>
+                              {uniqueSitesInItem.map(site => (
+                                <td key={site} className="px-6 py-4 text-sm font-bold text-gray-500 text-center">
+                                  {String(group.siteCounts[site] || 0).padStart(2, '0')}
+                                </td>
+                              ))}
+                              <td className="px-6 py-4 text-sm font-extrabold text-[#BD4F19] text-right">
+                                {String(group.total).padStart(2, '0')}
+                              </td>
+                            </tr>
+                          ))}
+                          
+                          {/* Totals row */}
+                          <tr className="bg-gray-50/50 font-black text-sm text-gray-800 border-t border-gray-200">
+                            <td className="px-6 py-4 uppercase tracking-wider font-extrabold text-xs text-gray-800">
+                              Totaux Globaux
+                            </td>
+                            <td className="px-6 py-4"></td>
+                            {uniqueSitesInItem.map(site => (
+                              <td key={site} className="px-6 py-4 text-center font-extrabold text-sm text-gray-700">
+                                {String(siteTotals[site] || 0).padStart(2, '0')}
+                              </td>
+                            ))}
+                            <td className="px-6 py-4 text-right font-black text-sm text-[#BD4F19]">
+                              {selectedHistoryItem.total_orders}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-[#FBF9F1] border border-gray-200 rounded-3xl p-12 flex flex-col items-center justify-center text-center text-gray-455 gap-2 min-h-[400px]">
+                  <BarChart2 size={32} className="text-gray-300 animate-pulse" />
+                  <span className="font-semibold">Sélectionnez une date pour voir les détails des commandes</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen w-full flex font-sans bg-[#FBF9F1]">
       {/* Sidebar Navigation Panel */}
@@ -1493,6 +1811,21 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
             </button>
 
             <button
+              onClick={() => setActiveTab('journal')}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-bold transition-all relative ${
+                activeTab === 'journal'
+                  ? 'bg-orange-50 text-orange-700'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/30'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <FileText size={18} />
+                <span>Journal des commandes</span>
+              </div>
+              {activeTab === 'journal' && <span className="absolute right-0 top-2 bottom-2 w-1 bg-orange-700 rounded-l" />}
+            </button>
+
+            <button
               onClick={() => setActiveTab('settings')}
               className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-bold transition-all relative ${
                 activeTab === 'settings'
@@ -1552,6 +1885,11 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
             <div>
               <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Paramètres généraux</h2>
               <p className="text-xs font-semibold text-gray-400 mt-1">Gérez la configuration globale de votre plateforme.</p>
+            </div>
+          ) : activeTab === 'journal' ? (
+            <div>
+              <h2 className="text-2xl font-extrabold text-gray-900 tracking-tight">Journal des commandes</h2>
+              <p className="text-xs font-semibold text-gray-400 mt-1">Historique des menus publiés et des statistiques de commandes.</p>
             </div>
           ) : (
             <div>
@@ -1616,19 +1954,26 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                 <Save size={16} />
                 {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
               </button>
+            ) : activeTab === 'journal' ? (
+              <button
+                onClick={() => setIsReportModalOpen(true)}
+                className="flex items-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer"
+              >
+                <BarChart2 size={16} />
+                Générer un Rapport
+              </button>
             ) : (
               <>
                 <button
-                  onClick={() => window.print()}
-                  className="flex items-center gap-2 bg-white border border-orange-700 text-orange-700 hover:bg-orange-50 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                  onClick={() => setIsReportModalOpen(true)}
+                  className="flex items-center gap-2 bg-white border border-[#BD4F19] text-[#BD4F19] hover:bg-orange-50 px-4 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   <BarChart2 size={16} />
                   Rapports
                 </button>
                 <button
-                  onClick={handlePublishMenu}
-                  disabled={isPublishing}
-                  className="flex items-center gap-2 bg-orange-700 hover:bg-orange-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                  onClick={() => setActiveTab('meals')}
+                  className="flex items-center gap-2 bg-orange-700 hover:bg-orange-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   <Send size={16} />
                   Publier le Menu
@@ -2042,6 +2387,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
             )}
           </div>
         )}
+
+        {activeTab === 'journal' && renderJournal()}
 
         {activeTab === 'settings' && (
           <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto py-2">
@@ -2703,6 +3050,13 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         onConfirm={modalConfig.onConfirm}
         onCancel={() => setModalConfig(prev => ({ ...prev, isOpen: false }))}
       />
+
+      {isReportModalOpen && (
+        <HistoryReportModal
+          orderHistory={orderHistory}
+          onClose={() => setIsReportModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

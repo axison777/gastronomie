@@ -60,3 +60,18 @@ export interface Settings {
   whatsapp_prefix?: string;
   whatsapp_number?: string | null;
 }
+
+export interface OrderHistoryDetail {
+  meal_name: string;
+  protein_option: 'Viande' | 'Poisson' | null;
+  count: number;
+}
+
+export interface OrderHistory {
+  id: string;
+  publish_date: string;
+  total_orders: number;
+  details: OrderHistoryDetail[];
+  created_at: string;
+}
+

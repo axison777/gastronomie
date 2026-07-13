@@ -320,23 +320,21 @@ function App() {
   const isMaintenanceActive = config?.lock_time.includes('|maintenance') || false;
 
   if (isMaintenanceActive) {
-    return (
-      <>
-        <MaintenanceView onAdminClick={() => setIsAdminOpen(true)} />
-        {isAdminOpen && (
-          <AdminDashboard
-            employees={employees}
-            meals={meals}
-            orders={orders}
-            config={config}
-            sites={sites}
-            departments={departments}
-            onDataUpdate={loadData}
-            onClose={() => setIsAdminOpen(false)}
-          />
-        )}
-      </>
-    );
+    if (isAdminOpen) {
+      return (
+        <AdminDashboard
+          employees={employees}
+          meals={meals}
+          orders={orders}
+          config={config}
+          sites={sites}
+          departments={departments}
+          onDataUpdate={loadData}
+          onClose={() => setIsAdminOpen(false)}
+        />
+      );
+    }
+    return <MaintenanceView onAdminClick={() => setIsAdminOpen(true)} />;
   }
 
   const departmentsForSite = [
@@ -637,10 +635,8 @@ function App() {
       <AdminLoginModal 
         isOpen={isAdminLoginModalOpen}
         onClose={() => setIsAdminLoginModalOpen(false)}
-        correctPassword={config?.admin_password}
         onSuccess={() => {
           setIsAdminLoginModalOpen(false);
-          setIsAuthenticated(true);
           setIsAdminOpen(true);
         }}
       />
