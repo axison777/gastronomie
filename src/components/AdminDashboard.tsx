@@ -232,6 +232,12 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
             site_id: newDeptSiteId,
           }).eq('id', editingDeptId);
           if (error) throw error;
+
+          // Transférer également tous les collaborateurs du département (et donc leurs commandes) vers le nouveau site
+          const { error: empError } = await supabase.from('employees').update({
+            site_id: newDeptSiteId,
+          }).eq('department_id', editingDeptId);
+          if (empError) throw empError;
         } else {
           const { error } = await supabase.from('departments').insert({
             name: newDeptName.trim(),
