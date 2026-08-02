@@ -862,11 +862,20 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     if (!employeeForm.first_name.trim() || !employeeForm.last_name.trim()) return;
 
     try {
+      // Résolution automatique du site selon le département sélectionné
+      let targetSiteId = employeeForm.site_id || null;
+      if (employeeForm.department_id) {
+        const selectedDept = departments.find(d => d.id === employeeForm.department_id);
+        if (selectedDept && selectedDept.site_id) {
+          targetSiteId = selectedDept.site_id;
+        }
+      }
+
       if (employeeDrawerMode === 'create') {
         const { error } = await supabase.from('employees').insert({
           first_name: employeeForm.first_name.trim(),
           last_name: employeeForm.last_name.trim(),
-          site_id: employeeForm.site_id || null,
+          site_id: targetSiteId,
           department_id: employeeForm.department_id || null,
           is_active: employeeForm.is_active,
         });
@@ -876,7 +885,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
           .update({
             first_name: employeeForm.first_name.trim(),
             last_name: employeeForm.last_name.trim(),
-            site_id: employeeForm.site_id || null,
+            site_id: targetSiteId,
             department_id: employeeForm.department_id || null,
             is_active: employeeForm.is_active,
           })
@@ -2709,12 +2718,23 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                   <div className="relative">
                     <select
                       value={employeeForm.department_id}
-                      onChange={e => setEmployeeForm({ ...employeeForm, department_id: e.target.value })}
+                      onChange={e => {
+                        const selectedDeptId = e.target.value;
+                        const selectedDept = departments.find(d => d.id === selectedDeptId);
+                        const newSiteId = selectedDept?.site_id || employeeForm.site_id;
+                        setEmployeeForm({
+                          ...employeeForm,
+                          department_id: selectedDeptId,
+                          site_id: newSiteId,
+                        });
+                      }}
                       className="w-full pl-4 pr-10 py-3 border border-gray-250 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 bg-white cursor-pointer appearance-none"
-                      disabled={!employeeForm.site_id}
                     >
                       <option value="">Sélectionner un département</option>
-                      {departments.filter(d => d.site_id === employeeForm.site_id).map(d => (
+                      {(employeeForm.site_id 
+                        ? departments.filter(d => d.site_id === employeeForm.site_id)
+                        : departments
+                      ).map(d => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
