@@ -10,30 +10,6 @@ interface SummaryProps {
   sites: Site[];
 }
 
-// Map keywords in meal names to high-quality Unsplash food images
-const getMealImage = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet')) {
-    return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) {
-    return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('végé') || lower.includes('legume') || lower.includes('légume')) {
-    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('mer') || lower.includes('grillé') || lower.includes('grille')) {
-    return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('riz') || lower.includes('rice')) {
-    return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('pasta') || lower.includes('spaghetti') || lower.includes('nouille')) {
-    return 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=150&auto=format&fit=crop&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=150&auto=format&fit=crop&q=80';
-};
-
 const getMealIcon = (name: string) => {
   const lower = name.toLowerCase();
   if (lower.includes('yassa') || lower.includes('poulet')) {
@@ -250,11 +226,17 @@ export default function Summary({ meals, orders, employees, sites }: SummaryProp
                     if (optCount === 0) return null;
                     return (
                       <div key={opt} className="flex items-center gap-2 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 pl-2 pr-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
-                        <img 
-                          src={meal.image_url || getMealImage(meal.name)} 
-                          alt={meal.name} 
-                          className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-white/10" 
-                        />
+                        <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                          {meal.image_url ? (
+                            <img 
+                              src={meal.image_url} 
+                              alt={meal.name} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <Utensils size={12} className="text-slate-400" />
+                          )}
+                        </div>
                         <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                           <span className="text-slate-900 dark:text-white font-bold mr-1">{optCount}</span> {meal.name} <span className="text-[10px] uppercase ml-0.5 opacity-70 font-bold bg-slate-200 dark:bg-white/10 px-1.5 py-0.5 rounded-full">{opt}</span>
                         </span>
@@ -267,11 +249,17 @@ export default function Summary({ meals, orders, employees, sites }: SummaryProp
 
             return (
               <div key={meal.id} className="flex items-center gap-2 bg-white/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 pl-2 pr-3.5 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
-                <img 
-                  src={meal.image_url || getMealImage(meal.name)} 
-                  alt={meal.name} 
-                  className="w-6 h-6 rounded-full object-cover border border-slate-200 dark:border-white/10" 
-                />
+                <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-white/10 flex items-center justify-center">
+                  {meal.image_url ? (
+                    <img 
+                      src={meal.image_url} 
+                      alt={meal.name} 
+                      className="w-full h-full object-cover" 
+                    />
+                  ) : (
+                    <Utensils size={12} className="text-slate-400" />
+                  )}
+                </div>
                 <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                   <span className="text-slate-900 dark:text-white font-bold mr-1">{count}</span> {meal.name}
                 </span>
@@ -330,11 +318,17 @@ export default function Summary({ meals, orders, employees, sites }: SummaryProp
                       <div key={meal.id} className="py-3.5 flex flex-col gap-1.5">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <img 
-                              src={meal.image_url || getMealImage(meal.name)}
-                              alt={meal.name}
-                              className="w-8 h-8 rounded-lg object-cover shadow-sm border border-slate-200 dark:border-white/10"
-                            />
+                            <div className="w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-sm border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                              {meal.image_url ? (
+                                <img 
+                                  src={meal.image_url}
+                                  alt={meal.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Utensils size={14} className="text-slate-400" />
+                              )}
+                            </div>
                             <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{meal.name}</span>
                           </div>
                           <span className="text-lg font-bold text-slate-900 dark:text-white">{mOrders.length}</span>

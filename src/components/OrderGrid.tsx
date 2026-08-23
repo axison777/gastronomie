@@ -13,28 +13,7 @@ interface OrderGridProps {
 }
 
 // Map keywords in meal names to high-quality Unsplash food images
-const getMealImage = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet')) {
-    return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) {
-    return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('végé') || lower.includes('legume') || lower.includes('légume')) {
-    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('mer') || lower.includes('grillé') || lower.includes('grille')) {
-    return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('riz') || lower.includes('rice')) {
-    return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('pasta') || lower.includes('spaghetti') || lower.includes('nouille')) {
-    return 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=150&auto=format&fit=crop&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=150&auto=format&fit=crop&q=80';
-};
+// Default images removed
 
 // Generate initials from employee name
 const getInitials = (name: string) => {
@@ -136,11 +115,17 @@ export default function OrderGrid({
                 className="w-[150px] py-4 px-4 text-center border-l border-gray-200"
               >
                 <div className="flex flex-col items-center gap-2">
-                  <img
-                    src={meal.image_url || getMealImage(meal.name)}
-                    alt={meal.name}
-                    className="w-10 h-10 rounded-full object-cover shadow-sm border border-gray-100 bg-gray-50"
-                  />
+                  <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 shadow-sm bg-slate-100 border border-gray-100 flex items-center justify-center">
+                    {meal.image_url ? (
+                      <img 
+                        src={meal.image_url}
+                        alt={meal.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Utensils size={18} className="text-slate-300" />
+                    )}
+                  </div>
                   <span className="text-sm font-semibold text-gray-900 tracking-tight leading-tight block truncate w-full max-w-[130px]" title={meal.name}>
                     {meal.name}
                   </span>

@@ -22,30 +22,6 @@ interface AdminDashboardProps {
   onClose: () => void;
 }
 
-// Map keywords in meal names to high-quality Unsplash food images
-const getMealImage = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet')) {
-    return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) {
-    return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('végé') || lower.includes('legume') || lower.includes('légume')) {
-    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('mer') || lower.includes('grillé') || lower.includes('grille')) {
-    return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('riz') || lower.includes('rice')) {
-    return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=150&auto=format&fit=crop&q=80';
-  }
-  if (lower.includes('pasta') || lower.includes('spaghetti') || lower.includes('nouille')) {
-    return 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=150&auto=format&fit=crop&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=150&auto=format&fit=crop&q=80';
-};
-
 const getMealCategory = (name: string) => {
   const lower = name.toLowerCase();
   if (lower.includes('salade') || lower.includes('veget') || lower.includes('végé') || lower.includes('quinoa') || lower.includes('benga')) {
@@ -1509,14 +1485,17 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                 </button>
               </div>
             </div>
-            {/* Dish Image filling the right side */}
-            <div className="absolute right-0 top-0 bottom-0 w-[42%] overflow-hidden rounded-r-3xl border-l border-gray-100">
-              <img 
-                src={popular.image_url || getMealImage(popular.name)} 
-                alt={popular.name} 
-                className="w-full h-full object-cover opacity-70" 
-              />
-              <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#FBF9F1] to-transparent" />
+            <div className="absolute right-0 top-0 bottom-0 w-[42%] overflow-hidden rounded-r-3xl border-l border-gray-100 flex items-center justify-center bg-gray-100">
+              {popular.image_url ? (
+                <img 
+                  src={popular.image_url} 
+                  alt={popular.name} 
+                  className="w-full h-full object-cover opacity-70 absolute inset-0" 
+                />
+              ) : (
+                <Utensils size={48} className="text-gray-300" />
+              )}
+              <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#FBF9F1] to-transparent z-10" />
             </div>
           </div>
         </div>
@@ -2364,14 +2343,18 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                           }`}
                         >
                           {/* Dish Image / Checkbox / Category Badges Area */}
-                          <div className="h-40 w-full relative overflow-hidden">
-                            <img 
-                              src={meal.image_url || getMealImage(meal.name)} 
-                              alt={meal.name} 
-                              className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${
-                                meal.is_active ? 'opacity-90' : 'opacity-75 group-hover:opacity-90'
-                              }`} 
-                            />
+                          <div className="h-40 w-full relative overflow-hidden bg-gray-100 flex items-center justify-center">
+                            {meal.image_url ? (
+                              <img 
+                                src={meal.image_url} 
+                                alt={meal.name} 
+                                className={`w-full h-full object-cover absolute inset-0 transition-transform duration-500 group-hover:scale-105 ${
+                                  meal.is_active ? 'opacity-90' : 'opacity-75 group-hover:opacity-90'
+                                }`} 
+                              />
+                            ) : (
+                              <Utensils size={32} className="text-gray-300" />
+                            )}
                             
                             {/* Checkbox Trigger Top-Left */}
                             <button
@@ -3379,7 +3362,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     }
                   }}
                   className="h-44 w-full rounded-2xl border-2 border-dashed border-gray-250 overflow-hidden relative group cursor-pointer flex flex-col items-center justify-center text-center p-4 bg-cover bg-center transition-all hover:border-orange-200/50"
-                  style={{ backgroundImage: `linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url(${mealForm.imageUrl || getMealImage(mealForm.name)})` }}
+                  style={{ backgroundImage: mealForm.imageUrl ? `linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), url(${mealForm.imageUrl})` : 'linear-gradient(rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.55)), #334155' }}
                 >
                   <input 
                     type="file" 

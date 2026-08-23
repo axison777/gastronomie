@@ -14,15 +14,7 @@ interface DesktopOrderViewProps {
   departments: Department[];
 }
 
-const getMealImage = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet')) return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('légume')) return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('grillé')) return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('riz') || lower.includes('rice') || lower.includes('thieb')) return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=400&auto=format&fit=crop&q=80';
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=80';
-};
+// Default images removed
 
 const getMealSubtitle = (name: string) => {
   const lower = name.toLowerCase();
@@ -280,13 +272,16 @@ export default function DesktopOrderView({
           </div>
         ) : selectedMealForDetail ? (
           <div className="flex-1 flex flex-col h-full animate-in slide-in-from-right-8 duration-300 bg-white/40 dark:bg-[#0B0F15]/40 relative">
-            {/* Header Image */}
-            <div className="relative w-full h-48 shrink-0">
-              <img 
-                src={selectedMealForDetail.image_url || getMealImage(selectedMealForDetail.name)} 
-                alt={selectedMealForDetail.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-full h-[220px] relative bg-slate-100 flex items-center justify-center shrink-0">
+              {selectedMealForDetail.image_url ? (
+                <img 
+                  src={selectedMealForDetail.image_url} 
+                  alt={selectedMealForDetail.name}
+                  className="w-full h-full object-cover absolute inset-0"
+                />
+              ) : (
+                <Utensils size={48} className="text-slate-300" />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-white dark:from-[#0B0F15] via-transparent to-transparent" />
               
               {/* Back button */}
@@ -386,12 +381,16 @@ export default function DesktopOrderView({
                       }`}
                     >
                       {/* Top Image Section */}
-                      <div className="relative w-full h-[180px] rounded-[16px] overflow-hidden">
-                        <img 
-                          src={meal.image_url || getMealImage(meal.name)} 
-                          alt={meal.name}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                        />
+                      <div className="relative w-full h-[180px] shrink-0 bg-slate-100 flex items-center justify-center rounded-[16px] overflow-hidden">
+                        {meal.image_url ? (
+                          <img 
+                            src={meal.image_url} 
+                            alt={meal.name}
+                            className="w-full h-full object-cover absolute inset-0 transition-transform duration-700 group-hover:scale-105"
+                          />
+                        ) : (
+                          <Utensils size={32} className="text-slate-300" />
+                        )}
                         
                         {/* More Button Overlay */}
                         <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white dark:bg-[#0B0F15] flex items-center justify-center shadow-md text-slate-700 dark:text-slate-300">

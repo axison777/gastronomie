@@ -23,15 +23,7 @@ interface MobileOrderViewProps {
   heroSlideIndex?: number;
 }
 
-const getMealImage = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet')) return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('légume')) return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('grillé')) return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&auto=format&fit=crop&q=80';
-  if (lower.includes('thiebou') || lower.includes('thiébou') || lower.includes('riz')) return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=400&auto=format&fit=crop&q=80';
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=80';
-};
+// Default images removed
 
 const getMealSubtitle = (name: string) => {
   const lower = name.toLowerCase();
@@ -212,13 +204,16 @@ export default function MobileOrderView({
                     isOrdered ? 'ring-2 ring-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.15)]' : ''
                   }`}
                 >
-                  {/* Top Image Section */}
-                  <div className="relative w-full h-[140px] shrink-0">
-                    <img 
-                      src={meal.image_url || getMealImage(meal.name)} 
-                      alt={meal.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative w-full h-[140px] shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                    {meal.image_url ? (
+                      <img 
+                        src={meal.image_url} 
+                        alt={meal.name}
+                        className="w-full h-full object-cover absolute inset-0"
+                      />
+                    ) : (
+                      <Utensils size={32} className="text-slate-300 dark:text-slate-600" />
+                    )}
                     
                     {/* Top Right Action Button */}
                     {!isOrdered && !isPending && (
@@ -287,13 +282,16 @@ export default function MobileOrderView({
         {/* Meal Detail Modal */}
         {selectedMealForDetail && (
           <div className="fixed inset-0 z-[100] bg-white dark:bg-[#0B0F15] flex flex-col animate-in slide-in-from-bottom-full duration-300">
-            {/* Header/Image Area */}
-            <div className="relative w-full h-[40vh] bg-slate-100 dark:bg-slate-800 shrink-0">
-              <img 
-                src={selectedMealForDetail.image_url || getMealImage(selectedMealForDetail.name)} 
-                alt={selectedMealForDetail.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="w-full h-[220px] relative bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              {selectedMealForDetail?.image_url ? (
+                <img 
+                  src={selectedMealForDetail.image_url} 
+                  alt={selectedMealForDetail?.name}
+                  className="w-full h-full object-cover absolute inset-0"
+                />
+              ) : (
+                <Utensils size={48} className="text-slate-300 dark:text-slate-600" />
+              )}
               <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent" />
               
               <button 
