@@ -26,6 +26,7 @@ export interface Employee {
   site_id?: string;
   department_id?: string;
   is_active: boolean;
+  is_cotisation_paid?: boolean;
   created_at: string;
   
   // Relations issues des requêtes jointes
@@ -38,6 +39,7 @@ export interface Meal {
   name: string;
   created_at: string;
   has_options?: boolean;
+  options?: string[]; // Dynamic options array
   is_active?: boolean;
   image_url?: string;
 }
@@ -48,7 +50,7 @@ export interface Order {
   meal_id: string;
   order_date: string;
   created_at: string;
-  protein_option?: 'Viande' | 'Poisson' | null;
+  protein_option?: string | null;
 }
 
 export interface Settings {
@@ -61,9 +63,27 @@ export interface Settings {
   whatsapp_number?: string | null;
 }
 
+export interface Announcement {
+  id: string;
+  title: string;
+  message: string;
+  image_url?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface HeroBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  image_url?: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface OrderHistoryDetail {
   meal_name: string;
-  protein_option: 'Viande' | 'Poisson' | null;
+  protein_option: string | null;
   count: number;
 }
 

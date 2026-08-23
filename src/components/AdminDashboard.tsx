@@ -5,7 +5,7 @@ import {
   Settings as SettingsIcon, Clock, Plus, Search, Send,
   Lock, Mail, Eye, EyeOff, ExternalLink, Calendar, 
   TrendingUp, FileText, Building2, ChevronRight, BarChart2, LogOut,
-  MapPin, Home, Folder, ShieldCheck, MessageSquare
+  MapPin, Home, Folder, ShieldCheck, MessageSquare, Bell, Image, Upload, AlertTriangle, Edit2
 } from 'lucide-react';
 import ConfirmModal from './ConfirmModal';
 import HistoryReportModal from './HistoryReportModal';
@@ -106,6 +106,9 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
   // Tab & UI states
   const [activeTab, setActiveTab] = useState<'dashboard' | 'meals' | 'sites' | 'employees' | 'settings' | 'journal'>('dashboard');
+  const [settingsTab, setSettingsTab] = useState<'system' | 'platform' | 'integration' | 'security' | 'hero' | 'announcements'>('system');
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [heroBanners, setHeroBanners] = useState<any[]>([]);
   const [selectedSite, setSelectedSite] = useState<string>(sites[0]?.id ?? '');
 
   useEffect(() => {
@@ -144,7 +147,37 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     if (activeTab === 'journal' || activeTab === 'dashboard') {
       fetchOrderHistory();
     }
+    if (activeTab === 'settings') {
+      fetchAnnouncements();
+      fetchHeroBanners();
+    }
   }, [activeTab]);
+
+  const fetchAnnouncements = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setAnnouncements(data || []);
+    } catch (e) {
+      console.error('Error fetching announcements:', e);
+    }
+  };
+
+  const fetchHeroBanners = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('hero_banners')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setHeroBanners(data || []);
+    } catch (e) {
+      console.error('Error fetching hero banners:', e);
+    }
+  };
 
   // Site/Dept Creation modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -351,7 +384,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [drawerMode, setDrawerMode] = useState<'create' | 'edit'>('create');
-  const [mealForm, setMealForm] = useState({ id: '', name: '', has_options: false, imageUrl: '' });
+  const [mealForm, setMealForm] = useState<{ id: string; name: string; has_options: boolean; imageUrl: string; options: string[] }>({ id: '', name: '', has_options: false, imageUrl: '', options: [] });
+  const [newOptionText, setNewOptionText] = useState('');
   const [mealImageFile, setMealImageFile] = useState<File | null>(null);
   const [isEmployeeDrawerOpen, setIsEmployeeDrawerOpen] = useState(false);
   const [employeeDrawerMode, setEmployeeDrawerMode] = useState<'create' | 'edit'>('create');
@@ -372,6 +406,25 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
   const [whatsappNumber, setWhatsappNumber] = useState('6 12 34 56 78');
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
 
+  // Announcements CRUD states
+  const [heroImageFile, setHeroImageFile] = useState<File | null>(null);
+  const [announcementImageFile, setAnnouncementImageFile] = useState<File | null>(null);
+  const [isAnnouncementModalOpen, setIsAnnouncementModalOpen] = useState(false);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '',
+    message: '',
+    image_url: ''
+  });
+
+  // Hero Banners CRUD states
+  const [isHeroBannerModalOpen, setIsHeroBannerModalOpen] = useState(false);
+  const [editingHeroBannerId, setEditingHeroBannerId] = useState<string | null>(null);
+  const [heroBannerForm, setHeroBannerForm] = useState({
+    title: '',
+    subtitle: '',
+    image_url: ''
+  });
   // Password Security states
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -576,6 +629,24 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     setPassword('');
   };
 
+  const uploadImageToCloudinary = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'gastronomie');
+    
+    const response = await fetch('https://api.cloudinary.com/v1_1/qnun0lly/image/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || 'Erreur de communication avec Cloudinary.');
+    }
+    const data = await response.json();
+    return data.secure_url;
+  };
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -617,6 +688,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         const { error } = await supabase.from('meals').insert({
           name: mealForm.name,
           has_options: mealForm.has_options,
+          options: mealForm.has_options ? mealForm.options : null,
           image_url: finalImageUrl || null
         });
         if (error) throw error;
@@ -634,6 +706,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
           .update({ 
             name: mealForm.name,
             has_options: mealForm.has_options,
+            options: mealForm.has_options ? mealForm.options : null,
             image_url: finalImageUrl || null
           })
           .eq('id', mealForm.id);
@@ -663,10 +736,141 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     ]),
   ].sort();
 
+  const openCreateAnnouncementModal = () => {
+    setEditingAnnouncementId(null);
+    setAnnouncementForm({ title: '', message: '', image_url: '' });
+    setAnnouncementImageFile(null);
+    setIsAnnouncementModalOpen(true);
+  };
+
+  const openEditAnnouncementModal = (ann: any) => {
+    setEditingAnnouncementId(ann.id);
+    setAnnouncementForm({ title: ann.title, message: ann.message, image_url: ann.image_url || '' });
+    setAnnouncementImageFile(null);
+    setIsAnnouncementModalOpen(true);
+  };
+
+  const closeAnnouncementModal = () => {
+    setIsAnnouncementModalOpen(false);
+    setAnnouncementForm({ title: '', message: '', image_url: '' });
+    setAnnouncementImageFile(null);
+    setEditingAnnouncementId(null);
+  };
+
+  const handleSaveAnnouncement = async () => {
+    try {
+      let finalImageUrl = announcementForm.image_url;
+      if (announcementImageFile) {
+        finalImageUrl = await uploadImageToCloudinary(announcementImageFile);
+      }
+      
+      const payload = {
+        title: announcementForm.title,
+        message: announcementForm.message,
+        image_url: finalImageUrl
+      };
+
+      if (editingAnnouncementId) {
+        await supabase.from('announcements').update(payload).eq('id', editingAnnouncementId);
+      } else {
+        await supabase.from('announcements').insert(payload);
+      }
+      
+      fetchAnnouncements();
+      closeAnnouncementModal();
+    } catch (e: any) {
+      console.error(e);
+      alert('Erreur lors de l\'enregistrement de l\'annonce : ' + e.message);
+    }
+  };
+
+  const handleToggleAnnouncement = async (id: string, currentStatus: boolean) => {
+    try {
+      await supabase.from('announcements').update({ is_active: !currentStatus }).eq('id', id);
+      fetchAnnouncements();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    try {
+      await supabase.from('announcements').delete().eq('id', id);
+      fetchAnnouncements();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleToggleMealActive = async (id: string, currentStatus: boolean) => {
     try {
       await supabase.from('meals').update({ is_active: !currentStatus }).eq('id', id);
       onDataUpdate();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const openCreateHeroBannerModal = () => {
+    setHeroBannerForm({ title: '', subtitle: '', image_url: '' });
+    setHeroImageFile(null);
+    setIsHeroBannerModalOpen(true);
+  };
+
+  const openEditHeroBannerModal = (banner: any) => {
+    setEditingHeroBannerId(banner.id);
+    setHeroBannerForm({ title: banner.title, subtitle: banner.subtitle, image_url: banner.image_url || '' });
+    setHeroImageFile(null);
+    setIsHeroBannerModalOpen(true);
+  };
+
+  const closeHeroBannerModal = () => {
+    setIsHeroBannerModalOpen(false);
+    setHeroBannerForm({ title: '', subtitle: '', image_url: '' });
+    setHeroImageFile(null);
+    setEditingHeroBannerId(null);
+  };
+
+  const handleSaveHeroBanner = async () => {
+    try {
+      let finalImageUrl = heroBannerForm.image_url;
+      if (heroImageFile) {
+        finalImageUrl = await uploadImageToCloudinary(heroImageFile);
+      }
+      
+      const payload = {
+        title: heroBannerForm.title,
+        subtitle: heroBannerForm.subtitle,
+        image_url: finalImageUrl
+      };
+
+      if (editingHeroBannerId) {
+        await supabase.from('hero_banners').update(payload).eq('id', editingHeroBannerId);
+      } else {
+        await supabase.from('hero_banners').insert(payload);
+      }
+      
+      fetchHeroBanners();
+      closeHeroBannerModal();
+    } catch (e: any) {
+      console.error(e);
+      alert('Erreur lors de l\'enregistrement de la bannière : ' + e.message);
+    }
+  };
+
+  const handleToggleHeroBanner = async (id: string, currentStatus: boolean) => {
+    try {
+      await supabase.from('hero_banners').update({ is_active: !currentStatus }).eq('id', id);
+      fetchHeroBanners();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteHeroBanner = async (id: string) => {
+    try {
+      await supabase.from('hero_banners').delete().eq('id', id);
+      fetchHeroBanners();
     } catch (e) {
       console.error(e);
     }
@@ -752,7 +956,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         setIsPublishing(true);
         try {
           // 1. Aggregate current orders by meal, option, and site
-          const mealDetailsMap: Record<string, { meal_name: string, protein_option: 'Viande' | 'Poisson' | null, site_name: string, count: number }> = {};
+          const mealDetailsMap: Record<string, { meal_name: string, protein_option: string | null, site_name: string, count: number }> = {};
           let totalOrdersCount = 0;
 
           orders.forEach(order => {
@@ -1007,39 +1211,105 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     });
   };
 
-  const buildSettingsPayload = (maintenanceOverride?: boolean) => ({
-    lock_time: (maintenanceOverride ?? isMaintenance) ? `${newLockTime}|maintenance` : newLockTime,
-    timezone,
-    maintenance_message: maintenanceMsg.trim() || null,
-    whatsapp_prefix: whatsappPrefix,
-    whatsapp_number: whatsappNumber.trim() || null,
-  });
-
-  const handleUpdateSettings = async (showSuccess = true) => {
+  const handleUpdateSystemSettings = async () => {
     setIsSavingSettings(true);
     try {
+      const payload = {
+        timezone,
+        lock_time: isMaintenance ? `${newLockTime}|maintenance` : newLockTime,
+      };
       const { error } = await supabase
         .from('settings')
-        .update(buildSettingsPayload())
+        .update(payload)
         .eq('id', 'config');
       if (error) throw error;
       onDataUpdate();
-      if (showSuccess) {
-        setModalConfig({
-          isOpen: true,
-          title: 'Paramètres enregistrés ✓',
-          message: 'Vos paramètres ont été mis à jour et pris en compte immédiatement.',
-          type: 'alert',
-          confirmText: 'Parfait',
-          onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
-        });
-      }
+      setModalConfig({
+        isOpen: true,
+        title: 'Système & Clôture mis à jour ✓',
+        message: 'L\'heure de clôture et le fuseau horaire ont été enregistrés.',
+        type: 'alert',
+        confirmText: 'Parfait',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
     } catch (e: any) {
       console.error(e);
       setModalConfig({
         isOpen: true,
         title: 'Erreur de sauvegarde',
-        message: e.message || 'Impossible d\'enregistrer les paramètres.',
+        message: e.message || 'Impossible d\'enregistrer les paramètres système.',
+        type: 'danger',
+        confirmText: 'Compris',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleUpdatePlatformSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const payload = {
+        maintenance_message: maintenanceMsg.trim() || null,
+        lock_time: isMaintenance ? `${newLockTime}|maintenance` : newLockTime,
+      };
+      const { error } = await supabase
+        .from('settings')
+        .update(payload)
+        .eq('id', 'config');
+      if (error) throw error;
+      onDataUpdate();
+      setModalConfig({
+        isOpen: true,
+        title: 'État de la plateforme mis à jour ✓',
+        message: 'Les paramètres de maintenance ont été enregistrés.',
+        type: 'alert',
+        confirmText: 'Parfait',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    } catch (e: any) {
+      console.error(e);
+      setModalConfig({
+        isOpen: true,
+        title: 'Erreur de sauvegarde',
+        message: e.message || 'Impossible d\'enregistrer l\'état de la plateforme.',
+        type: 'danger',
+        confirmText: 'Compris',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const handleUpdateIntegrationSettings = async () => {
+    setIsSavingSettings(true);
+    try {
+      const payload = {
+        whatsapp_prefix: whatsappPrefix,
+        whatsapp_number: whatsappNumber.trim() || null,
+      };
+      const { error } = await supabase
+        .from('settings')
+        .update(payload)
+        .eq('id', 'config');
+      if (error) throw error;
+      onDataUpdate();
+      setModalConfig({
+        isOpen: true,
+        title: 'Intégration Traiteur mise à jour ✓',
+        message: 'Le numéro WhatsApp de réception a été enregistré.',
+        type: 'alert',
+        confirmText: 'Parfait',
+        onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
+      });
+    } catch (e: any) {
+      console.error(e);
+      setModalConfig({
+        isOpen: true,
+        title: 'Erreur de sauvegarde',
+        message: e.message || 'Impossible d\'enregistrer l\'intégration traiteur.',
         type: 'danger',
         confirmText: 'Compris',
         onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false }))
@@ -1055,7 +1325,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
     try {
       const { error } = await supabase
         .from('settings')
-        .update(buildSettingsPayload(checked))
+        .update({ lock_time: checked ? `${newLockTime}|maintenance` : newLockTime })
         .eq('id', 'config');
       if (error) throw error;
       onDataUpdate();
@@ -1687,7 +1957,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                     {Object.entries(group.options).map(([optName, optCount]) => (
                                       <span key={optName} className="inline-flex items-center gap-1.5">
                                         <span className={`w-5 h-5 flex items-center justify-center rounded text-[9px] font-black text-white ${
-                                          optName === 'Viande' ? 'bg-[#BD4F19]' : 'bg-[#517664]'
+                                          optName.toLowerCase() === 'viande' ? 'bg-[#BD4F19]' : optName.toLowerCase() === 'poisson' ? 'bg-[#517664]' : 'bg-orange-400'
                                         }`}>
                                           {optName.charAt(0)}
                                         </span>
@@ -1923,7 +2193,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                 <button
                   onClick={() => {
                     setDrawerMode('create');
-                    setMealForm({ id: '', name: '', has_options: false, imageUrl: '' });
+                    setMealForm({ id: '', name: '', has_options: false, imageUrl: '', options: [] });
+                    setNewOptionText('');
                     setIsDrawerOpen(true);
                   }}
                   className="flex items-center gap-2 bg-orange-700 hover:bg-orange-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors"
@@ -1959,17 +2230,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                   Ajouter un employé
                 </button>
               </div>
-            ) : activeTab === 'settings' ? (
-              <button
-                type="button"
-                onClick={() => handleUpdateSettings(true)}
-                disabled={isSavingSettings}
-                className="flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors shrink-0"
-              >
-                <Save size={16} />
-                {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
-              </button>
-            ) : activeTab === 'journal' ? (
+            ) : activeTab === 'settings' ? null : activeTab === 'journal' ? (
               <button
                 onClick={() => setIsReportModalOpen(true)}
                 className="flex items-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer"
@@ -2128,11 +2389,26 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                               )}
                             </button>
 
-                            {/* Category Badge Bottom-Left */}
-                            <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[9px] font-bold shadow-sm">
-                              <span className={`w-1.5 h-1.5 rounded-full ${cat.color}`} />
-                              <span className="text-gray-700 uppercase tracking-wider">{cat.label}</span>
-                            </div>
+                            {/* Category / Options Badge Bottom-Left */}
+                            {meal.has_options ? (
+                              <div className="absolute bottom-3 left-3 flex gap-1.5 flex-wrap max-w-[90%]">
+                                {(meal.options?.length ? meal.options : ['Viande', 'Poisson']).map(opt => (
+                                  <div key={opt} className="bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[9px] font-bold shadow-sm">
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      opt.toLowerCase() === 'viande' ? 'bg-[#BD4F19]' : 
+                                      opt.toLowerCase() === 'poisson' ? 'bg-[#517664]' : 
+                                      'bg-orange-500'
+                                    }`} />
+                                    <span className="text-gray-700 uppercase tracking-wider">{opt}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-full flex items-center gap-1.5 text-[9px] font-bold shadow-sm">
+                                <span className={`w-1.5 h-1.5 rounded-full ${cat.color}`} />
+                                <span className="text-gray-700 uppercase tracking-wider">{cat.label}</span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Text Contents Area */}
@@ -2152,8 +2428,10 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                     id: meal.id, 
                                     name: meal.name, 
                                     has_options: meal.has_options || false,
-                                    imageUrl: ''
+                                    imageUrl: '',
+                                    options: meal.options || (meal.has_options ? ['Viande', 'Poisson'] : [])
                                   });
+                                  setNewOptionText('');
                                   setIsDrawerOpen(true);
                                 }} 
                                 className="text-orange-700 hover:underline text-[10px] font-bold"
@@ -2176,7 +2454,8 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                   <div 
                     onClick={() => {
                       setDrawerMode('create');
-                      setMealForm({ id: '', name: '', has_options: false, imageUrl: '' });
+                      setMealForm({ id: '', name: '', has_options: false, imageUrl: '', options: [] });
+                      setNewOptionText('');
                       setIsDrawerOpen(true);
                     }}
                     className="border-2 border-dashed border-gray-250 rounded-3xl p-6 flex flex-col items-center justify-center text-center hover:bg-orange-50/15 cursor-pointer transition-all h-full min-h-[220px]"
@@ -2278,6 +2557,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                           <th className="px-6 py-5 font-bold">Site assigné</th>
                           <th className="px-6 py-5 font-bold">Département</th>
                           <th className="px-6 py-5 font-bold">Statut</th>
+                          <th className="px-6 py-5 font-bold">Cotisation</th>
                           <th className="pr-8 pl-6 py-5 font-bold text-right">Actions</th>
                         </tr>
                       </thead>
@@ -2315,6 +2595,11 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                     {!isActive && (
                                       <span className="text-[10px] text-gray-400 font-semibold mt-0.5">Inactif</span>
                                     )}
+                                    {!(emp.is_cotisation_paid ?? true) && (
+                                      <span className="inline-flex mt-1 text-[9px] font-extrabold text-red-500 bg-red-50 border border-red-100 px-1.5 py-0.5 rounded w-max uppercase tracking-wider">
+                                        Cotisation impayée
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
 
@@ -2345,6 +2630,26 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                     />
                                     <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-[#BD4F19] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
                                   </label>
+                                </td>
+
+                                {/* Cotisation toggle */}
+                                <td className="px-6 py-5">
+                                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                                    <input 
+                                      type="checkbox" 
+                                      checked={emp.is_cotisation_paid ?? true}
+                                      onChange={async () => {
+                                        const newVal = !(emp.is_cotisation_paid ?? true);
+                                        const { error } = await supabase.from('employees').update({ is_cotisation_paid: newVal }).eq('id', emp.id);
+                                        if (!error) onDataUpdate();
+                                      }}
+                                      className="sr-only peer"
+                                    />
+                                    <div className="w-11 h-6 bg-red-200 rounded-full peer peer-focus:outline-none peer-checked:bg-emerald-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                                  </label>
+                                  <span className="block mt-1 text-[9px] font-bold text-gray-500 uppercase tracking-wider">
+                                    {(emp.is_cotisation_paid ?? true) ? 'À jour' : 'Impayé'}
+                                  </span>
                                 </td>
 
                                 {/* Actions (Edit / Delete) */}
@@ -2406,213 +2711,452 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         {activeTab === 'journal' && renderJournal()}
 
         {activeTab === 'settings' && (
-          <div className="space-y-8 animate-in fade-in duration-300 max-w-5xl mx-auto py-2">
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Card 1: Système & Clôture */}
-              <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 justify-between relative overflow-hidden">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
-                      <Clock size={18} />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900">Système & Clôture</h3>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Heure de clôture automatique</label>
-                      <input
-                        type="text"
-                        placeholder="11:00 AM"
-                        value={newLockTime}
-                        onChange={e => setNewLockTime(e.target.value)}
-                        onBlur={() => handleUpdateSettings(false)}
-                        className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-bold text-gray-700 placeholder-gray-400"
-                      />
-                      <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Heure limite pour les commandes du jour.</p>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fuseau horaire de l'entreprise</label>
-                      <div className="relative">
-                        <select
-                          value={timezone}
-                          onChange={e => setTimezone(e.target.value)}
-                          onBlur={() => handleUpdateSettings(false)}
-                          className="w-full pl-4 pr-10 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-semibold text-gray-700 cursor-pointer appearance-none"
-                        >
-                          <option value="Europe/Paris (GMT+1)">Europe/Paris (GMT+1)</option>
-                          <option value="GMT (GMT+0)">GMT (GMT+0)</option>
-                          <option value="Africa/Ouagadougou (GMT+0)">Africa/Ouagadougou (GMT+0)</option>
-                        </select>
-                        <ChevronRight className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 rotate-90 pointer-events-none" size={16} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 2: État de la plateforme */}
-              <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 justify-between">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
-                      <ShieldCheck size={18} />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900">État de la plateforme</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Maintenance toggle wrapper */}
-                    <div className="bg-[#FBF9F1] border border-[#E4E3DB] p-4 rounded-2xl flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <h4 className="font-bold text-gray-900 text-sm">Activer le Mode Maintenance</h4>
-                        <p className="text-[10px] text-gray-400 font-semibold mt-0.5 leading-normal">
-                          Rend le site temporairement inaccessible aux clients.
-                        </p>
-                      </div>
-                      
-                      <label className="relative inline-flex items-center cursor-pointer select-none">
-                        <input 
-                          type="checkbox" 
-                          checked={isMaintenance}
-                          onChange={(e) => handleMaintenanceToggle(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-[#BD4F19] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
-                      </label>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Message de maintenance personnalisé</label>
-                      <textarea
-                        placeholder="Ex: Nous mettons à jour notre menu d'été..."
-                        rows={2}
-                        value={maintenanceMsg}
-                        onChange={e => setMaintenanceMsg(e.target.value)}
-                        onBlur={() => handleUpdateSettings(false)}
-                        className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 3: Intégration Traiteur */}
-              <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 justify-between">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
-                      <MessageSquare size={18} />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900">Intégration Traiteur</h3>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Numéro WhatsApp de réception des commandes</label>
-                      <div className="flex gap-2">
-                        <div className="relative w-32 shrink-0">
-                          <select
-                            value={whatsappPrefix}
-                            onChange={e => setWhatsappPrefix(e.target.value)}
-                            onBlur={() => handleUpdateSettings(false)}
-                            className="w-full pl-3 pr-8 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-bold text-gray-750 cursor-pointer appearance-none"
-                          >
-                            <option value="+33 (FR)">+33 (FR)</option>
-                            <option value="+226 (BF)">+226 (BF)</option>
-                            <option value="+1 (US)">+1 (US)</option>
-                          </select>
-                          <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 rotate-90 pointer-events-none" size={14} />
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="6 12 34 56 78"
-                          value={whatsappNumber}
-                          onChange={e => setWhatsappNumber(e.target.value)}
-                          onBlur={() => handleUpdateSettings(false)}
-                          className="flex-1 px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
-                        />
-                      </div>
-                      <p className="text-[10px] text-gray-400 font-semibold leading-normal mt-1">
-                        Les notifications de nouvelles commandes seront envoyées à ce numéro.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Card 4: Sécurité du compte */}
-              <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 justify-between">
-                <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
-                      <Lock size={18} />
-                    </div>
-                    <h3 className="text-base font-bold text-gray-900">Sécurité du compte</h3>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ancien mot de passe</label>
-                      <input
-                        type="password"
-                        value={oldPassword}
-                        onChange={e => setOldPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2.5 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nouveau mot de passe</label>
-                      <input
-                        type="password"
-                        value={newPassword}
-                        onChange={e => setNewPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2.5 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Confirmer le nouveau mot de passe</label>
-                      <input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={e => setConfirmPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full px-4 py-2.5 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleUpdatePassword}
-                  className="w-full bg-[#BD4F19] hover:bg-[#A64B2A] text-white py-3 rounded-xl font-bold transition-all shadow-md text-xs uppercase tracking-wider active:scale-98 cursor-pointer mt-2"
-                >
-                  Mettre à jour le mot de passe
-                </button>
-              </div>
+          <div className="animate-in fade-in duration-300 max-w-6xl mx-auto py-2 flex flex-col md:flex-row gap-8">
+            {/* Sidebar */}
+            <div className="w-full md:w-64 shrink-0 flex flex-col gap-2">
+              <button 
+                onClick={() => setSettingsTab('system')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'system' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <Clock size={18} /> Système & Clôture
+              </button>
+              <button 
+                onClick={() => setSettingsTab('platform')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'platform' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <SettingsIcon size={18} /> État de la plateforme
+              </button>
+              <button 
+                onClick={() => setSettingsTab('integration')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'integration' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <MessageSquare size={18} /> Intégration Traiteur
+              </button>
+              <button 
+                onClick={() => setSettingsTab('hero')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'hero' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <Image size={18} /> En-tête (Hero)
+              </button>
+              <button 
+                onClick={() => setSettingsTab('announcements')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'announcements' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <Bell size={18} /> Annonces & Popups
+              </button>
+              <button 
+                onClick={() => setSettingsTab('security')}
+                className={`p-4 rounded-2xl flex items-center gap-3 text-left transition-colors font-bold ${settingsTab === 'security' ? 'bg-white shadow-sm border border-[#E4E3DB] text-gray-900' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'}`}
+              >
+                <Lock size={18} /> Sécurité
+              </button>
             </div>
 
-            {/* Danger Zone Banner */}
-            <div className="bg-[#FDF3EB] border border-[#F5C2B1] rounded-3xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mt-8">
-              <div>
-                <h4 className="font-extrabold text-[#B0382E] text-base">Zone de danger</h4>
-                <p className="text-xs text-gray-500 font-semibold mt-1">
-                  Cette action est irréversible et supprimera définitivement toutes les données d'historique.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handlePurgeOrders}
-                className="px-5 py-3 border border-[#B0382E] text-[#B0382E] hover:bg-[#B0382E] hover:text-white transition-all font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer shadow-xs active:scale-98 shrink-0 bg-transparent"
-              >
-                <Trash2 size={15} />
-                Purger l'historique des commandes
-              </button>
+            {/* Content Area */}
+            <div className="flex-1 space-y-8">
+              {settingsTab === 'system' && (
+                <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 relative overflow-hidden">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
+                        <Clock size={18} />
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900">Système & Clôture</h3>
+                    </div>
+                    
+                    <div className="space-y-4 max-w-xl">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Heure de clôture automatique</label>
+                        <input 
+                          type="time" 
+                          value={newLockTime}
+                          onChange={e => setNewLockTime(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800"
+                        />
+                        <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Heure limite pour les commandes du jour.</p>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fuseau horaire de l'entreprise</label>
+                        <div className="relative">
+                          <select
+                            value={timezone}
+                            onChange={e => setTimezone(e.target.value)}
+                            className="w-full pl-4 pr-10 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-medium text-slate-800 cursor-pointer appearance-none"
+                          >
+                            <option value="Europe/Paris">Europe/Paris (GMT+1)</option>
+                            <option value="Africa/Ouagadougou">Ouagadougou (GMT)</option>
+                            <option value="Africa/Abidjan">Abidjan (GMT)</option>
+                            <option value="America/New_York">New York (GMT-5)</option>
+                          </select>
+                          <ChevronRight className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 rotate-90 pointer-events-none" size={16} />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-4 border-t border-gray-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleUpdateSystemSettings}
+                        disabled={isSavingSettings}
+                        className="w-full flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                      >
+                        <Save size={16} />
+                        {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'platform' && (
+                <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 relative overflow-hidden">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
+                        <SettingsIcon size={18} />
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900">État de la plateforme</h3>
+                    </div>
+
+                    <div className="space-y-4 max-w-xl">
+                      <div className="bg-[#FBF9F1] border border-[#E4E3DB] p-4 rounded-2xl flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <h4 className="font-bold text-gray-900 text-sm">Activer le Mode Maintenance</h4>
+                          <p className="text-[10px] text-gray-400 font-semibold mt-0.5 leading-normal">
+                            Rend le site temporairement inaccessible aux clients.
+                          </p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                          <input 
+                            type="checkbox" 
+                            checked={isMaintenance}
+                            onChange={() => setIsMaintenance(!isMaintenance)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-[#BD4F19] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                        </label>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Message de maintenance personnalisé</label>
+                        <textarea
+                          placeholder="Ex: Nous mettons à jour notre menu d'été..."
+                          rows={2}
+                          value={maintenanceMsg}
+                          onChange={e => setMaintenanceMsg(e.target.value)}
+                          className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleUpdatePlatformSettings}
+                        disabled={isSavingSettings}
+                        className="w-full flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                      >
+                        <Save size={16} />
+                        {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'integration' && (
+                <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 relative overflow-hidden">
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
+                        <MessageSquare size={18} />
+                      </div>
+                      <h3 className="text-base font-bold text-gray-900">Intégration Traiteur</h3>
+                    </div>
+
+                    <div className="space-y-4 max-w-xl">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Numéro WhatsApp de réception des commandes</label>
+                        <div className="flex gap-2">
+                          <div className="relative w-32 shrink-0">
+                            <select
+                              value={whatsappPrefix}
+                              onChange={e => setWhatsappPrefix(e.target.value)}
+                              className="w-full pl-3 pr-8 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-medium text-slate-800 cursor-pointer appearance-none"
+                            >
+                              <option value="+33 (FR)">+33 (FR)</option>
+                              <option value="+226 (BF)">+226 (BF)</option>
+                              <option value="+1 (US)">+1 (US)</option>
+                            </select>
+                            <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 rotate-90 pointer-events-none" size={14} />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="6 12 34 56 78"
+                            value={whatsappNumber}
+                            onChange={e => setWhatsappNumber(e.target.value)}
+                            className="flex-1 px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
+                          />
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-semibold leading-normal mt-1">
+                          Les notifications de nouvelles commandes seront envoyées à ce numéro.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={handleUpdateIntegrationSettings}
+                        disabled={isSavingSettings}
+                        className="w-full flex items-center justify-center gap-2 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:opacity-50 text-white px-5 py-3 rounded-xl text-sm font-bold shadow-sm transition-colors"
+                      >
+                        <Save size={16} />
+                        {isSavingSettings ? 'Enregistrement...' : 'Enregistrer les paramètres'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {settingsTab === 'hero' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">En-têtes (Hero)</h3>
+                      <p className="text-sm text-gray-500 mt-1">Gérez les bannières d'en-tête qui s'affichent sur la page d'accueil de la plateforme publique.</p>
+                    </div>
+                    <button
+                      onClick={openCreateHeroBannerModal}
+                      className="bg-[#BD4F19] hover:bg-[#A64B2A] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus size={18} />
+                      Nouvelle Bannière
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {heroBanners.map((banner) => (
+                      <div key={banner.id} className="bg-white rounded-3xl border border-[#E4E3DB] shadow-sm overflow-hidden flex flex-col group">
+                        {/* Image Header */}
+                        {banner.image_url ? (
+                          <div className="h-32 w-full relative">
+                            <img src={banner.image_url} alt={banner.title} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                          </div>
+                        ) : (
+                          <div className="h-32 w-full bg-[#FBF9F1] flex items-center justify-center border-b border-[#E4E3DB]">
+                            <Image size={32} className="text-gray-300" />
+                          </div>
+                        )}
+                        
+                        <div className="p-5 flex flex-col flex-1 gap-4">
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <h4 className="font-bold text-gray-900 leading-tight">{banner.title}</h4>
+                              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                                <input 
+                                  type="checkbox" 
+                                  checked={banner.is_active}
+                                  onChange={(e) => handleToggleHeroBanner(banner.id, !e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-[#BD4F19] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                              </label>
+                            </div>
+                            <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed mt-2">{banner.subtitle}</p>
+                          </div>
+                          
+                          <div className="mt-auto flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
+                            <button
+                              onClick={() => openEditHeroBannerModal(banner)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Voulez-vous vraiment supprimer cette bannière ?')) {
+                                  handleDeleteHeroBanner(banner.id);
+                                }
+                              }}
+                              className="w-8 h-8 rounded-full flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {heroBanners.length === 0 && (
+                      <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed border-[#E4E3DB] rounded-3xl bg-[#FBF9F1] text-gray-400">
+                        <Image size={48} className="mb-4 opacity-20" />
+                        <p className="font-medium text-gray-500">Aucune bannière configurée</p>
+                        <p className="text-sm mt-1">Créez votre première bannière d'en-tête pour la page d'accueil.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'announcements' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">Annonces & Messages</h3>
+                      <p className="text-sm text-gray-500 mt-1">Gérez les messages qui défilent dans l'en-tête de la plateforme publique.</p>
+                    </div>
+                    <button
+                      onClick={openCreateAnnouncementModal}
+                      className="bg-[#BD4F19] hover:bg-[#A64B2A] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center gap-2 cursor-pointer"
+                    >
+                      <Plus size={18} />
+                      Nouvelle Annonce
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {announcements.map((ann) => (
+                      <div key={ann.id} className="bg-white rounded-3xl border border-[#E4E3DB] shadow-sm overflow-hidden flex flex-col group">
+                        {/* Image Header */}
+                        {ann.image_url ? (
+                          <div className="h-32 w-full relative">
+                            <img src={ann.image_url} alt={ann.title} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                          </div>
+                        ) : (
+                          <div className="h-32 w-full bg-[#FBF9F1] flex items-center justify-center border-b border-[#E4E3DB]">
+                            <MessageSquare size={32} className="text-gray-300" />
+                          </div>
+                        )}
+                        
+                        <div className="p-5 flex flex-col flex-1 gap-4">
+                          <div>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <h4 className="font-bold text-gray-900 leading-tight">{ann.title}</h4>
+                              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                                <input 
+                                  type="checkbox" 
+                                  checked={ann.is_active}
+                                  onChange={(e) => handleToggleAnnouncement(ann.id, !e.target.checked)}
+                                  className="sr-only peer"
+                                />
+                                <div className="w-9 h-5 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-[#BD4F19] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                              </label>
+                            </div>
+                            <p className="text-xs text-gray-500 line-clamp-3 leading-relaxed mt-2">{ann.message}</p>
+                          </div>
+                          
+                          <div className="mt-auto flex items-center justify-end gap-2 pt-4 border-t border-gray-100">
+                            <button
+                              onClick={() => openEditAnnouncementModal(ann)}
+                              className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Voulez-vous vraiment supprimer cette annonce ?')) {
+                                  handleDeleteAnnouncement(ann.id);
+                                }
+                              }}
+                              className="w-8 h-8 rounded-full flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {announcements.length === 0 && (
+                      <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed border-[#E4E3DB] rounded-3xl bg-[#FBF9F1] text-gray-400">
+                        <Bell size={48} className="mb-4 opacity-20" />
+                        <p className="font-medium text-gray-500">Aucune annonce configurée</p>
+                        <p className="text-sm mt-1">Créez votre première annonce pour communiquer avec vos clients.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {settingsTab === 'security' && (
+                <div className="max-w-2xl space-y-8">
+                  <div className="bg-white p-8 rounded-3xl border border-[#E4E3DB] shadow-sm flex flex-col gap-6 relative overflow-hidden">
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[#FCE4D6] text-[#BD4F19] flex items-center justify-center shrink-0">
+                          <Lock size={18} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900">Mot de passe Administrateur</h3>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ancien mot de passe</label>
+                          <input
+                            type="password"
+                            value={oldPassword}
+                            onChange={e => setOldPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nouveau mot de passe</label>
+                          <input
+                            type="password"
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Confirmer le nouveau mot de passe</label>
+                          <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleUpdatePassword}
+                      className="w-full bg-[#BD4F19] hover:bg-[#A64B2A] text-white py-3.5 rounded-xl font-bold transition-all shadow-md text-sm flex items-center justify-center gap-2 cursor-pointer mt-2"
+                    >
+                      <Lock size={16} />
+                      Mettre à jour le mot de passe
+                    </button>
+                  </div>
+
+                  {/* Danger Zone Banner */}
+                  <div className="bg-[#FDF3EB] border border-[#F5C2B1] rounded-3xl p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                    <div>
+                      <h4 className="font-extrabold text-[#B0382E] text-base flex items-center gap-2">
+                        <AlertTriangle size={18} /> Zone de danger
+                      </h4>
+                      <p className="text-sm text-gray-600 font-semibold mt-2">
+                        Cette action est irréversible et supprimera définitivement toutes les données d'historique.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handlePurgeOrders}
+                      className="px-6 py-3 border-2 border-[#B0382E] text-[#B0382E] hover:bg-[#B0382E] hover:text-white transition-all font-bold rounded-xl text-sm flex items-center gap-2 cursor-pointer shadow-xs shrink-0 bg-transparent"
+                    >
+                      <Trash2 size={16} />
+                      Purger l'historique
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2701,7 +3245,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     <select
                       value={employeeForm.site_id}
                       onChange={e => setEmployeeForm({ ...employeeForm, site_id: e.target.value, department_id: '' })}
-                      className="w-full pl-4 pr-10 py-3 border border-gray-250 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 bg-white cursor-pointer appearance-none"
+                      className="w-full pl-4 pr-10 py-3 border border-gray-250 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 bg-white cursor-pointer appearance-none"
                     >
                       <option value="">Sélectionner un site</option>
                       {sites.map(s => (
@@ -2728,7 +3272,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                           site_id: newSiteId,
                         });
                       }}
-                      className="w-full pl-4 pr-10 py-3 border border-gray-250 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 bg-white cursor-pointer appearance-none"
+                      className="w-full pl-4 pr-10 py-3 border border-gray-250 rounded-xl focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 bg-white cursor-pointer appearance-none"
                     >
                       <option value="">Sélectionner un département</option>
                       {(employeeForm.site_id 
@@ -2881,7 +3425,14 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                     <input 
                       type="checkbox" 
                       checked={mealForm.has_options}
-                      onChange={(e) => setMealForm({ ...mealForm, has_options: e.target.checked })}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setMealForm({ 
+                          ...mealForm, 
+                          has_options: checked,
+                          options: checked && mealForm.options.length === 0 ? ['Viande', 'Poisson'] : mealForm.options
+                        });
+                      }}
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-gray-300 rounded-full peer peer-focus:outline-none peer-checked:bg-orange-700 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
@@ -2890,19 +3441,56 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
                 {/* Protein Option tag list if checked */}
                 {mealForm.has_options && (
-                  <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-200/50">
-                    <span className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-750 text-orange-700 text-xs font-bold px-3 py-1 rounded-full">
-                      Viande
-                    </span>
-                    <span className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-750 text-orange-700 text-xs font-bold px-3 py-1 rounded-full">
-                      Poisson
-                    </span>
-                    <button 
-                      type="button"
-                      className="flex items-center gap-1.5 bg-white border border-gray-200 text-gray-500 hover:text-gray-700 text-xs font-bold px-3 py-1 rounded-full border-dashed"
-                    >
-                      + Ajouter une option
-                    </button>
+                  <div className="flex flex-col gap-3 pt-3 border-t border-gray-200/50">
+                    <div className="flex flex-wrap gap-2">
+                      {mealForm.options.map((opt, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 bg-orange-50 border border-orange-200 text-orange-700 text-xs font-bold pl-3 pr-1 py-1 rounded-full">
+                          <span>{opt}</span>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const newOptions = [...mealForm.options];
+                              newOptions.splice(idx, 1);
+                              setMealForm({ ...mealForm, options: newOptions });
+                            }}
+                            className="w-5 h-5 rounded-full hover:bg-orange-200 flex items-center justify-center text-orange-600 transition-colors"
+                          >
+                            <X size={12} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="text" 
+                        value={newOptionText} 
+                        onChange={e => setNewOptionText(e.target.value)} 
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (newOptionText.trim() && !mealForm.options.includes(newOptionText.trim())) {
+                              setMealForm({ ...mealForm, options: [...mealForm.options, newOptionText.trim()] });
+                              setNewOptionText('');
+                            }
+                          }
+                        }}
+                        placeholder="Ajouter une option..." 
+                        className="flex-1 px-3 py-2 bg-white border border-gray-250 rounded-xl text-xs outline-none focus:border-orange-500 font-medium" 
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          if (newOptionText.trim() && !mealForm.options.includes(newOptionText.trim())) {
+                            setMealForm({ ...mealForm, options: [...mealForm.options, newOptionText.trim()] });
+                            setNewOptionText('');
+                          }
+                        }}
+                        disabled={!newOptionText.trim()}
+                        className="bg-white hover:bg-gray-50 text-gray-700 p-2 rounded-xl transition-colors border border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -3005,7 +3593,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                       rows={3}
                       value={newSiteAddress}
                       onChange={(e) => setNewSiteAddress(e.target.value)}
-                      className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 placeholder-gray-400"
+                      className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800 placeholder-gray-400"
                     />
                   </div>
                 </div>
@@ -3029,7 +3617,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                       <select
                         value={newDeptSiteId}
                         onChange={(e) => setNewDeptSiteId(e.target.value)}
-                        className="w-full pl-4 pr-10 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-semibold text-gray-750 cursor-pointer appearance-none"
+                        className="w-full pl-4 pr-10 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:border-orange-500 outline-none text-sm font-medium text-slate-800 cursor-pointer appearance-none"
                       >
                         {sites.map(s => (
                           <option key={s.id} value={s.id}>{s.name}</option>
@@ -3067,6 +3655,229 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
         </>
       )}
 
+      {/* Slide-out Drawer Panel for Hero Banners */}
+      {isHeroBannerModalOpen && (
+        <>
+          <div 
+            onClick={closeHeroBannerModal}
+            className="fixed inset-0 bg-black/35 backdrop-blur-xs z-40 transition-opacity duration-300"
+          />
+          <div className="fixed right-0 top-0 bottom-0 w-[440px] bg-white shadow-2xl z-50 border-l border-gray-200 flex flex-col justify-between animate-in slide-in-from-right duration-300 font-sans">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">
+                {editingHeroBannerId ? 'Modifier la bannière' : 'Nouvelle bannière'}
+              </h3>
+              <button 
+                onClick={closeHeroBannerModal}
+                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-650 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto space-y-6">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Titre</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Nouveauté..."
+                  value={heroBannerForm.title}
+                  onChange={e => setHeroBannerForm({...heroBannerForm, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sous-titre</label>
+                <textarea
+                  rows={4}
+                  placeholder="Des plats savoureux..."
+                  value={heroBannerForm.subtitle}
+                  onChange={e => setHeroBannerForm({...heroBannerForm, subtitle: e.target.value})}
+                  className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Image de fond</label>
+                <div className="flex flex-col gap-4">
+                  {/* Image Preview */}
+                  {heroBannerForm.image_url ? (
+                    <div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#E4E3DB]">
+                      <img src={heroBannerForm.image_url} alt="Preview" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHeroBannerForm({...heroBannerForm, image_url: ''});
+                          setHeroImageFile(null);
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-sm text-red-500 hover:bg-white hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-[#E4E3DB] bg-[#FBF9F1] flex flex-col items-center justify-center text-gray-400">
+                      <Image size={32} className="mb-2 opacity-50" />
+                      <span className="text-sm font-medium">Aucune image</span>
+                    </div>
+                  )}
+
+                  {/* Upload Input */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setHeroImageFile(file);
+                          setHeroBannerForm({...heroBannerForm, image_url: URL.createObjectURL(file)});
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-white border border-[#E4E3DB] rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold text-gray-700 cursor-pointer">
+                      <Upload size={18} />
+                      <span>Télécharger une image</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <button 
+                type="button"
+                onClick={closeHeroBannerModal}
+                className="text-sm font-bold text-gray-400 hover:text-gray-650 transition-colors"
+              >
+                Annuler
+              </button>
+              <button 
+                type="button"
+                onClick={handleSaveHeroBanner}
+                className="bg-[#BD4F19] hover:bg-[#A64B2A] text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all active:scale-98 flex items-center gap-2"
+              >
+                <Save size={14} />
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Slide-out Drawer Panel for Announcements */}
+      {isAnnouncementModalOpen && (
+        <>
+          <div 
+            onClick={closeAnnouncementModal}
+            className="fixed inset-0 bg-black/35 backdrop-blur-xs z-40 transition-opacity duration-300"
+          />
+          <div className="fixed right-0 top-0 bottom-0 w-[440px] bg-white shadow-2xl z-50 border-l border-gray-200 flex flex-col justify-between animate-in slide-in-from-right duration-300 font-sans">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">
+                {editingAnnouncementId ? 'Modifier l\'annonce' : 'Nouvelle annonce'}
+              </h3>
+              <button 
+                onClick={closeAnnouncementModal}
+                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-650 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto space-y-6">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Titre</label>
+                <input
+                  type="text"
+                  placeholder="Ex: Nouveauté..."
+                  value={announcementForm.title}
+                  onChange={e => setAnnouncementForm({...announcementForm, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Message</label>
+                <textarea
+                  rows={4}
+                  placeholder="Contenu de l'annonce..."
+                  value={announcementForm.message}
+                  onChange={e => setAnnouncementForm({...announcementForm, message: e.target.value})}
+                  className="w-full px-4 py-3 bg-[#FBF9F1] border border-[#E4E3DB] rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none text-sm font-medium text-slate-800"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Image</label>
+                <div className="flex flex-col gap-4">
+                  {/* Image Preview */}
+                  {announcementForm.image_url ? (
+                    <div className="relative w-full h-32 rounded-xl overflow-hidden border border-[#E4E3DB]">
+                      <img src={announcementForm.image_url} alt="Preview" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAnnouncementForm({...announcementForm, image_url: ''});
+                          setAnnouncementImageFile(null);
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 p-2 rounded-full shadow-sm text-red-500 hover:bg-white hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full h-32 rounded-xl border-2 border-dashed border-[#E4E3DB] bg-[#FBF9F1] flex flex-col items-center justify-center text-gray-400">
+                      <Image size={32} className="mb-2 opacity-50" />
+                      <span className="text-sm font-medium">Aucune image</span>
+                    </div>
+                  )}
+
+                  {/* Upload Input */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setAnnouncementImageFile(file);
+                          setAnnouncementForm({...announcementForm, image_url: URL.createObjectURL(file)});
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-white border border-[#E4E3DB] rounded-xl hover:bg-gray-50 transition-colors text-sm font-semibold text-gray-700 cursor-pointer">
+                      <Upload size={18} />
+                      <span>Télécharger une image</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-100 flex items-center justify-between bg-white shrink-0">
+              <button 
+                type="button"
+                onClick={closeAnnouncementModal}
+                className="text-sm font-bold text-gray-400 hover:text-gray-650 transition-colors"
+              >
+                Annuler
+              </button>
+              <button 
+                type="button"
+                onClick={handleSaveAnnouncement}
+                className="bg-[#BD4F19] hover:bg-[#A64B2A] text-white font-bold px-6 py-3 rounded-xl text-xs uppercase tracking-wider shadow-sm transition-all active:scale-98 flex items-center gap-2"
+              >
+                <Save size={14} />
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </>
+      )}
       <ConfirmModal
         isOpen={modalConfig.isOpen}
         title={modalConfig.title}

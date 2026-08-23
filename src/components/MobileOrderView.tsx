@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Check, Search, SlidersHorizontal, X, BarChart2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Check, Search, SlidersHorizontal, X, ChevronLeft, CheckCircle2, ArrowUpRight, Plus } from 'lucide-react';
 import type { Employee, Meal, Order, Site, Department } from '../lib/supabase';
 import { getEmployeeDeptName, getEmployeeFullName } from '../lib/employeeUtils';
+import ConfirmModal from './ConfirmModal';
 
 interface MobileOrderViewProps {
   employees: Employee[];
@@ -10,28 +11,26 @@ interface MobileOrderViewProps {
   isLocked: boolean;
   activeView: 'orders' | 'summary';
   onViewChange: (view: 'orders' | 'summary') => void;
-  onCellClick: (employeeId: string, mealId: string, option: 'Viande' | 'Poisson' | null) => void;
+  onCellClick: (employeeId: string, mealId: string, option: string | null) => void;
   sites: Site[];
   departments: Department[];
   selectedSite: string;
   selectedDept: string;
   onSiteChange: (site: string) => void;
   onDeptChange: (dept: string) => void;
+  config?: any;
+  heroBanners?: any[];
+  heroSlideIndex?: number;
 }
 
 const getMealImage = (name: string) => {
   const lower = name.toLowerCase();
-  if (lower.includes('yassa') || lower.includes('poulet'))
-    return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=150&auto=format&fit=crop&q=80';
-  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf'))
-    return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=150&auto=format&fit=crop&q=80';
-  if (lower.includes('salade') || lower.includes('veget') || lower.includes('légume'))
-    return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=150&auto=format&fit=crop&q=80';
-  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('grillé'))
-    return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=150&auto=format&fit=crop&q=80';
-  if (lower.includes('thiebou') || lower.includes('thiébou') || lower.includes('riz'))
-    return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=150&auto=format&fit=crop&q=80';
-  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=150&auto=format&fit=crop&q=80';
+  if (lower.includes('yassa') || lower.includes('poulet')) return 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400&auto=format&fit=crop&q=80';
+  if (lower.includes('mafe') || lower.includes('mafé') || lower.includes('boeuf') || lower.includes('bœuf')) return 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=80';
+  if (lower.includes('salade') || lower.includes('veget') || lower.includes('légume')) return 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&auto=format&fit=crop&q=80';
+  if (lower.includes('poisson') || lower.includes('fish') || lower.includes('grillé')) return 'https://images.unsplash.com/photo-1473093295043-cdd812d0e601?w=400&auto=format&fit=crop&q=80';
+  if (lower.includes('thiebou') || lower.includes('thiébou') || lower.includes('riz')) return 'https://images.unsplash.com/photo-1574672280242-9b3c267b3186?w=400&auto=format&fit=crop&q=80';
+  return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=80';
 };
 
 const getMealSubtitle = (name: string) => {
@@ -48,8 +47,6 @@ export default function MobileOrderView({
   meals,
   orders,
   isLocked,
-  activeView,
-  onViewChange,
   onCellClick,
   sites,
   departments,
@@ -57,11 +54,33 @@ export default function MobileOrderView({
   selectedDept,
   onSiteChange,
   onDeptChange,
+  config,
+  heroBanners = [],
+  heroSlideIndex = 0,
 }: MobileOrderViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'list' | 'bento'>('list');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [pendingOrder, setPendingOrder] = useState<{ mealId: string; option: 'Viande' | 'Poisson' | null } | null>(null);
+  const [pendingOrder, setPendingOrder] = useState<{ mealId: string; option: string | null } | null>(null);
+  const [selectedMealForDetail, setSelectedMealForDetail] = useState<Meal | null>(null);
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
+  const [errorModal, setErrorModal] = useState<{isOpen: boolean; message: string}>({ isOpen: false, message: '' });
+  
+  // Ref for scrolling back to the employee after ordering
+  const [recentlyOrderedId, setRecentlyOrderedId] = useState<string | null>(null);
+  const employeeRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  useEffect(() => {
+    if (viewMode === 'list' && recentlyOrderedId) {
+      const el = employeeRefs.current[recentlyOrderedId];
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setRecentlyOrderedId(null);
+        }, 100);
+      }
+    }
+  }, [viewMode, recentlyOrderedId]);
 
   const filteredEmployees = employees.filter(e =>
     e.is_active &&
@@ -71,40 +90,40 @@ export default function MobileOrderView({
   const getCurrentEmployeeOrder = () =>
     selectedEmployee ? orders.find(o => o.employee_id === selectedEmployee.id) : undefined;
 
-  const getEmployeeOrder = (mealId: string) => {
-    const current = getCurrentEmployeeOrder();
-    return current?.meal_id === mealId ? current : undefined;
-  };
-
   const handleEmployeeClick = (emp: Employee) => {
     if (isLocked || !emp.is_active) return;
     setPendingOrder(null);
     setSelectedEmployee(emp);
+    setViewMode('bento');
   };
 
   const handleMealSelect = (meal: Meal) => {
     if (isLocked || !selectedEmployee) return;
     const currentOrder = getCurrentEmployeeOrder();
+    
     if (currentOrder) {
       if (currentOrder.meal_id === meal.id) {
+        // Just deselect if clicking on the currently ordered meal
         onCellClick(selectedEmployee.id, meal.id, null);
-        closeSheet();
         return;
       } else {
-        alert("Cet employé a déjà commandé un plat aujourd'hui. Veuillez d'abord décocher son plat actuel avant d'en choisir un nouveau.");
+        setErrorModal({
+          isOpen: true,
+          message: "Cet employé a déjà commandé un plat aujourd'hui. Veuillez annuler sa commande avant d'en choisir un nouveau."
+        });
         return;
       }
     }
-    if (meal.has_options) {
-      setPendingOrder({ mealId: meal.id, option: null });
-    } else {
-      setPendingOrder({ mealId: meal.id, option: null });
-    }
+    
+    // Select meal and open detail view
+    setPendingOrder({ mealId: meal.id, option: null });
+    setSelectedMealForDetail(meal);
   };
 
-  const handleOptionSelect = (option: 'Viande' | 'Poisson') => {
-    if (!pendingOrder) return;
-    setPendingOrder({ ...pendingOrder, option });
+  const handleOptionSelect = (option: string) => {
+    if (selectedEmployee && selectedMealForDetail) {   
+      setPendingOrder({ ...pendingOrder!, option });
+    }
   };
 
   const canValidate = () => {
@@ -118,64 +137,306 @@ export default function MobileOrderView({
   const handleValidate = () => {
     if (!selectedEmployee || !pendingOrder) return;
     onCellClick(selectedEmployee.id, pendingOrder.mealId, pendingOrder.option);
-    setSelectedEmployee(null);
-    setPendingOrder(null);
+    setSelectedMealForDetail(null);
+    goBackToList(selectedEmployee.id);
   };
 
-  const handleDeselectOrder = () => {
-    if (!selectedEmployee || isLocked) return;
-    const currentOrder = getCurrentEmployeeOrder();
-    if (currentOrder) {
-      onCellClick(selectedEmployee.id, currentOrder.meal_id, null);
+  const goBackToList = (empIdToFocus?: string) => {
+    setViewMode('list');
+    if (empIdToFocus) {
+      setRecentlyOrderedId(empIdToFocus);
     }
-    closeSheet();
+    setTimeout(() => {
+      setSelectedEmployee(null);
+      setPendingOrder(null);
+      setSelectedMealForDetail(null);
+    }, 300);
   };
 
-  const closeSheet = () => {
-    setSelectedEmployee(null);
-    setPendingOrder(null);
-  };
+  if (viewMode === 'bento' && selectedEmployee) {
+    const currentOrder = getCurrentEmployeeOrder();
+    
+    return (
+      <div className="fixed inset-0 z-50 bg-[#FDFBF7] dark:bg-[#0B0F15] flex flex-col animate-in slide-in-from-right-full duration-300 overflow-hidden transition-colors">
+        {/* Glows */}
+        <div className="absolute top-0 left-0 right-0 h-40 bg-orange-500/10 blur-[100px] pointer-events-none" />
 
-  return (
-    <div className="flex flex-col min-h-screen bg-[#F5F4EC]">
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto pb-28">
-        {/* Page Title */}
-        <div className="px-5 pt-5 pb-3">
-          <h2 className="text-2xl font-extrabold text-gray-900 leading-tight tracking-tight">
-            Commande Publique
-          </h2>
-          <p className="text-[13px] text-gray-500 font-semibold mt-1 leading-snug">
-            Sélectionnez vos plats pour le déjeuner d'aujourd'hui.
-          </p>
+        {/* Bento Page Header */}
+        <div className="px-5 py-4 glass-panel border-x-0 border-t-0 rounded-none sticky top-0 z-20 flex items-center shadow-sm">
+          <button 
+            onClick={() => goBackToList()} 
+            className="w-10 h-10 rounded-full flex items-center justify-center glass-button text-slate-700 dark:text-white transition-colors mr-3"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <div className="flex-1">
+            <h2 className="text-xl font-extrabold text-slate-900 dark:text-white leading-tight">
+              {getEmployeeFullName(selectedEmployee)}
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
+              {getEmployeeDeptName(selectedEmployee) || 'Commande repas'}
+            </p>
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="px-5 pb-5 flex items-center gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="Rechercher mon nom..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white border border-[#E4E3DB] rounded-2xl outline-none text-[14px] font-semibold text-gray-700 placeholder-gray-400 shadow-sm"
-            />
+        {/* Bento Grid Content or Blocked Message */}
+        <div className="flex-1 overflow-y-auto p-4 pb-32">
+          {selectedEmployee.is_cotisation_paid === false ? (
+            <div className="h-full flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-300">
+              <div className="w-24 h-24 rounded-full bg-red-100 dark:bg-red-500/10 text-red-500 dark:text-red-400 flex items-center justify-center mx-auto mb-6 border border-red-200 dark:border-red-500/20 shadow-lg shadow-red-500/10">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              
+              <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white mb-4">
+                Cotisation Impayée
+              </h3>
+              
+              <p className="text-base font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
+                Désolé <span className="text-slate-900 dark:text-white font-bold">{selectedEmployee.first_name}</span>, vous n'êtes pas à jour sur vos cotisations. <br/><br/>
+                <span className="text-red-500 dark:text-red-400 font-bold bg-red-50 dark:bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-100 dark:border-red-500/20 inline-block mt-2">Veuillez vous approcher des responsables de la restauration.</span>
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 relative z-10">
+            {meals.map(meal => {
+              const isOrdered = currentOrder?.meal_id === meal.id;
+              const isPending = pendingOrder?.mealId === meal.id;
+              
+              return (
+                <div 
+                  key={meal.id}
+                  onClick={() => handleMealSelect(meal)}
+                  className={`relative w-full flex flex-col rounded-3xl overflow-hidden shadow-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B0F15] transition-all duration-300 active:scale-[0.98] ${
+                    isOrdered ? 'ring-2 ring-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.15)]' : ''
+                  }`}
+                >
+                  {/* Top Image Section */}
+                  <div className="relative w-full h-[140px] shrink-0">
+                    <img 
+                      src={meal.image_url || getMealImage(meal.name)} 
+                      alt={meal.name}
+                      className="w-full h-full object-cover"
+                    />
+                    
+                    {/* Top Right Action Button */}
+                    {!isOrdered && !isPending && (
+                      <button 
+                        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-md text-slate-900 dark:text-white flex items-center justify-center transition-colors shadow-sm pointer-events-none"
+                      >
+                        <Plus size={18} strokeWidth={2.5} />
+                      </button>
+                    )}
+                    {isOrdered && (
+                      <div className="absolute top-3 right-3 bg-orange-500 text-white p-1.5 rounded-full shadow-lg shadow-orange-500/40">
+                        <CheckCircle2 size={16} strokeWidth={2.5} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Info Section */}
+                  <div className="p-3.5 flex flex-col gap-1.5 flex-1 justify-center z-10 bg-white dark:bg-transparent">
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-[15px] truncate">{meal.name}</h3>
+                    <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate">{getMealSubtitle(meal.name)}</p>
+                    
+                    {isOrdered && (
+                      <div className="mt-1 flex items-center gap-1.5 text-orange-500 font-bold text-xs">
+                        {meal.has_options && currentOrder.protein_option && (
+                          <span className="uppercase tracking-wider">{currentOrder.protein_option} • </span>
+                        )}
+                        <span>Commandé</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            </div>
+          )}
+        </div>
+
+        {/* Validate Floating Action Button */}
+        {pendingOrder && !selectedMealForDetail && (
+          <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#FDFBF7] dark:from-[#0B0F15] via-[#FDFBF7]/90 dark:via-[#0B0F15]/90 to-transparent pt-12 z-20">
+            <button
+              onClick={handleValidate}
+              disabled={!canValidate()}
+              className="w-full py-4 primary-gradient-btn disabled:from-slate-200 disabled:to-slate-100 dark:disabled:from-white/10 dark:disabled:to-white/5 disabled:text-slate-400 dark:disabled:text-white/30 disabled:border-slate-300 dark:disabled:border-white/5 text-white font-extrabold rounded-2xl text-[16px] flex items-center justify-center gap-2 transition-all shadow-xl active:scale-[0.98] disabled:scale-100"
+            >
+              <Check size={20} strokeWidth={3} />
+              Valider la commande
+            </button>
           </div>
-          <button 
-            onClick={() => setIsFilterSheetOpen(true)}
-            className={`w-11 h-11 flex items-center justify-center border rounded-2xl shadow-sm shrink-0 transition-colors ${
-              selectedSite !== 'All' || selectedDept !== 'All' 
-                ? 'bg-[#BD4F19] border-[#BD4F19] text-white' 
-                : 'bg-white border-[#E4E3DB] text-gray-500'
-            }`}
+        )}
+        
+        {/* Cancel Button */}
+        {currentOrder && !isLocked && !pendingOrder && !selectedMealForDetail && (
+          <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#FDFBF7] dark:from-[#0B0F15] via-[#FDFBF7]/90 dark:via-[#0B0F15]/90 to-transparent pt-12 z-20">
+            <button
+              onClick={() => {
+                onCellClick(selectedEmployee.id, currentOrder.meal_id, null);
+              }}
+              className="w-full py-4 bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 font-extrabold rounded-2xl text-[16px] flex items-center justify-center gap-2 transition-all active:scale-[0.98] border border-red-200 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20"
+            >
+              Annuler cette commande
+            </button>
+          </div>
+        )}
+
+        {/* Meal Detail Modal */}
+        {selectedMealForDetail && (
+          <div className="fixed inset-0 z-[100] bg-white dark:bg-[#0B0F15] flex flex-col animate-in slide-in-from-bottom-full duration-300">
+            {/* Header/Image Area */}
+            <div className="relative w-full h-[40vh] bg-slate-100 dark:bg-slate-800 shrink-0">
+              <img 
+                src={selectedMealForDetail.image_url || getMealImage(selectedMealForDetail.name)} 
+                alt={selectedMealForDetail.name}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent" />
+              
+              <button 
+                onClick={() => {
+                  setSelectedMealForDetail(null);
+                  setPendingOrder(null);
+                }}
+                className="absolute top-6 left-5 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white"
+              >
+                <ChevronLeft size={24} />
+              </button>
+            </div>
+
+            {/* Details Area */}
+            <div className="flex-1 flex flex-col -mt-8 bg-white dark:bg-[#0B0F15] rounded-t-[32px] overflow-hidden relative z-10">
+              <div className="flex-1 overflow-y-auto px-6 pt-8 pb-32">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                    {selectedMealForDetail.name}
+                  </h2>
+                </div>
+                
+                <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-8">
+                  {getMealSubtitle(selectedMealForDetail.name)}. Un plat délicieux préparé avec des ingrédients frais et une attention particulière pour satisfaire toutes vos envies gourmandes.
+                </p>
+
+                {selectedMealForDetail.has_options && (
+                  <div className="mb-8">
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-lg mb-4">Option (Requis)</h3>
+                    <div className="flex flex-wrap gap-3">
+                      {(selectedMealForDetail.options?.length ? selectedMealForDetail.options : ['Viande', 'Poisson']).map(option => (
+                        <button
+                          key={option}
+                          onClick={() => handleOptionSelect(option)}
+                          className={`flex-1 min-w-[120px] py-4 text-sm font-bold rounded-2xl transition-all border-2 ${
+                            pendingOrder?.option === option 
+                              ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/30' 
+                              : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Validate Button Area */}
+              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white dark:from-[#0B0F15] via-white/90 dark:via-[#0B0F15]/90 to-transparent pt-12">
+                <button
+                  onClick={handleValidate}
+                  disabled={!canValidate()}
+                  className="w-full py-4 bg-[#FF6B4A] hover:bg-[#F25A38] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-white/30 text-white font-extrabold rounded-[20px] text-[16px] flex items-center justify-center gap-2 transition-all shadow-[0_8px_20px_rgba(255,107,74,0.3)] disabled:shadow-none active:scale-[0.98] disabled:scale-100"
+                >
+                  Valider ma commande
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col min-h-screen bg-transparent">
+      {/* Scrollable content (List Mode) */}
+      <div className="flex-1 overflow-y-auto pb-32 relative">
+        {/* Hero Header Card */}
+        <div className="relative w-full rounded-b-[40px] overflow-hidden bg-slate-900 shadow-xl mb-6">
+          {/* Carousel Container */}
+          <div 
+            className="flex w-full transition-transform duration-700 ease-in-out"
+            style={{ transform: `translateX(-${heroSlideIndex * 100}%)` }}
           >
-            <SlidersHorizontal size={18} />
-          </button>
+            {(heroBanners.length > 0 ? heroBanners : [{}]).map((banner, idx) => {
+              const bgUrl = banner.image_url || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&auto=format&fit=crop&q=80";
+              const title = banner.title ? (
+                <div dangerouslySetInnerHTML={{ __html: banner.title.replace(/\n/g, '<br/>') }} />
+              ) : <>Découvrez <br/>notre Menu.</>;
+              const subtitle = banner.subtitle || "Des plats savoureux préparés avec soin tous les jours.";
+
+              return (
+                <div key={idx} className="w-full shrink-0 relative">
+                  {/* Background Image & Gradient */}
+                  <div className="absolute inset-0 z-0">
+                    <img 
+                      src={bgUrl} 
+                      alt="Hero background" 
+                      className="w-full h-full object-cover opacity-60"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/90" />
+                  </div>
+
+                  {/* Header Content */}
+                  <div className="relative z-10 px-5 pt-24 pb-28 flex flex-col gap-6">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-orange-400 font-extrabold text-xs uppercase tracking-widest block mb-1">
+                          Gastronomie Service
+                        </span>
+                        <h2 className="text-3xl font-extrabold text-white leading-tight tracking-tight">
+                          {title}
+                        </h2>
+                        <p className="text-white/80 font-medium text-sm mt-2 max-w-[200px] leading-relaxed">
+                          {subtitle}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Floating Search Bar over the bottom edge */}
+          <div className="absolute bottom-5 left-5 right-5 z-20 flex gap-3">
+            <div className="flex-1 relative">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={18} />
+              <input
+                type="text"
+                placeholder="Search..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="w-full pl-12 pr-5 py-3.5 bg-white dark:bg-[#0B0F15] rounded-full outline-none text-[15px] font-medium text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-orange-500/50 transition-all border border-slate-100 dark:border-white/5 shadow-xl"
+              />
+            </div>
+            <button 
+              onClick={() => setIsFilterSheetOpen(true)}
+              className={`w-[52px] h-[52px] flex items-center justify-center rounded-full shadow-xl shrink-0 transition-all border ${
+                selectedSite !== 'All' || selectedDept !== 'All' 
+                  ? 'primary-gradient-btn border-transparent text-white' 
+                  : 'bg-white dark:bg-[#0B0F15] border-slate-100 dark:border-white/5 text-orange-500 hover:bg-slate-50'
+              }`}
+            >
+              <SlidersHorizontal size={20} strokeWidth={2.5} />
+            </button>
+          </div>
         </div>
 
         {/* Employee Cards */}
-        <div className="px-5 flex flex-col gap-3">
+        <div className="px-5 flex flex-col gap-3 relative z-10">
           {filteredEmployees.map(emp => {
             const empOrders = orders.filter(o => o.employee_id === emp.id);
             const hasOrdered = empOrders.length > 0;
@@ -183,19 +444,25 @@ export default function MobileOrderView({
             const proteinOption = hasOrdered ? empOrders[0].protein_option : null;
             const fullName = getEmployeeFullName(emp);
             const deptName = getEmployeeDeptName(emp);
+            const isRecentlyOrdered = recentlyOrderedId === emp.id;
 
             return (
               <button
                 key={emp.id}
+                ref={(el) => employeeRefs.current[emp.id] = el}
                 onClick={() => handleEmployeeClick(emp)}
                 disabled={isLocked}
-                className="w-full bg-white border border-[#E4E3DB] rounded-2xl px-5 py-4 flex items-center justify-between text-left shadow-sm active:scale-[0.99] transition-transform disabled:opacity-60"
+                className={`w-full glass-panel rounded-2xl px-5 py-4 flex items-center justify-between text-left active:scale-[0.99] transition-all duration-500 disabled:opacity-60 border ${
+                  isRecentlyOrdered 
+                    ? 'border-orange-500/50 ring-1 ring-orange-500/30 shadow-[0_0_20px_rgba(249,115,22,0.15)] bg-orange-50 dark:bg-orange-500/5' 
+                    : 'hover:border-slate-300 dark:hover:border-white/20'
+                }`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="font-bold text-gray-900 text-[15px] leading-tight">{fullName}</span>
+                    <span className="font-bold text-slate-900 dark:text-white text-[15px] leading-tight">{fullName}</span>
                     {deptName && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-[#F0EFE8] border border-[#E4E3DB] text-gray-600 rounded-full">
+                      <span className="text-[10px] font-bold px-2 py-0.5 glass-button text-slate-600 dark:text-slate-300 rounded-full">
                         {deptName}
                       </span>
                     )}
@@ -203,248 +470,87 @@ export default function MobileOrderView({
 
                   {hasOrdered && orderedMeal ? (
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-base leading-none">🍽️</span>
-                      <span className="text-[#BD4F19] font-extrabold text-sm">{orderedMeal.name}</span>
+                      <span className="text-orange-600 dark:text-orange-400 font-extrabold text-sm flex items-center gap-1.5">
+                        <CheckCircle2 size={14} />
+                        {orderedMeal.name}
+                      </span>
                       {proteinOption && (
-                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-[#E2F0D9] text-[#385723] rounded-full uppercase tracking-wide">
+                        <span className="text-[9px] font-extrabold px-2 py-0.5 bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-300 rounded-md uppercase tracking-wide border border-orange-200 dark:border-orange-500/20">
                           {proteinOption}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-gray-400">
-                      <span className="text-sm leading-none">😶</span>
-                      <span className="text-[12px] font-semibold italic">Non commandé</span>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />
+                      <span className="text-[12px] font-medium">Non commandé</span>
                     </div>
                   )}
                 </div>
 
-                <div className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center ml-3 border-2 transition-all ${
+                <div className={`w-10 h-10 rounded-full shrink-0 flex items-center justify-center ml-3 border transition-all ${
                   hasOrdered
-                    ? 'bg-[#BD4F19] border-[#BD4F19] text-white shadow-sm'
-                    : 'bg-transparent border-[#D1CFC8]'
+                    ? 'bg-orange-100 dark:bg-orange-500/20 border-orange-200 dark:border-orange-500/30 text-orange-600 dark:text-orange-400'
+                    : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500'
                 }`}>
-                  {hasOrdered && <Check size={16} strokeWidth={3} />}
+                  <ChevronLeft size={20} className="rotate-180" />
                 </div>
               </button>
             );
           })}
 
           {filteredEmployees.length === 0 && (
-            <div className="text-center py-12 text-gray-400 font-semibold text-sm">
+            <div className="text-center py-12 text-slate-500 font-semibold text-sm">
               Aucun collaborateur trouvé
             </div>
           )}
         </div>
       </div>
 
-      {/* Bottom Tab Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-[#E4E3DB] px-8 py-4 flex items-center justify-around z-30 shadow-lg">
-        <button
-          onClick={() => onViewChange('orders')}
-          className="flex flex-col items-center"
-        >
-          {activeView === 'orders' ? (
-            <div className="bg-[#BD4F19] text-white rounded-full px-6 py-2.5 flex items-center gap-2 font-extrabold text-[13px] shadow-md">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              Commandes
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1 px-4 py-1 text-gray-400">
-              <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <span className="text-[10px] font-bold">Commandes</span>
-            </div>
-          )}
-        </button>
-
-        <button
-          onClick={() => onViewChange('summary')}
-          className="flex flex-col items-center"
-        >
-          {activeView === 'summary' ? (
-            <div className="bg-[#BD4F19] text-white rounded-full px-6 py-2.5 flex items-center gap-2 font-extrabold text-[13px] shadow-md">
-              <BarChart2 size={16} />
-              Synthèse
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1 px-4 py-1 text-gray-400">
-              <BarChart2 size={20} />
-              <span className="text-[10px] font-bold">Synthèse</span>
-            </div>
-          )}
-        </button>
-      </div>
-
-      {/* Bottom Sheet - Meal Selection */}
-      {selectedEmployee && (
-        <>
-          {/* Backdrop */}
-          <div
-            onClick={closeSheet}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-          />
-
-          {/* Sheet */}
-          <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 shadow-2xl flex flex-col max-h-[82vh] animate-in slide-in-from-bottom-4 duration-300">
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-2 shrink-0">
-              <div className="w-10 h-1 rounded-full bg-gray-300" />
-            </div>
-
-            {/* Sheet Header */}
-            <div className="px-6 pt-2 pb-4 flex items-center justify-between shrink-0">
-              <h3 className="text-xl font-extrabold text-gray-900 leading-tight">
-                Menu du jour pour {selectedEmployee.first_name}
-              </h3>
-              <button
-                onClick={closeSheet}
-                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 ml-3 shrink-0"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Meals List */}
-            <div className="flex-1 overflow-y-auto px-5 flex flex-col gap-3 pb-3">
-              {meals.map(meal => {
-                const existingOrder = getEmployeeOrder(meal.id);
-                const isPending = pendingOrder?.mealId === meal.id;
-                const isActive = !!existingOrder || isPending;
-
-                return (
-                  <button
-                    key={meal.id}
-                    onClick={() => handleMealSelect(meal)}
-                    className={`w-full text-left rounded-2xl border-2 transition-all ${
-                      isActive
-                        ? 'border-[#BD4F19]'
-                        : 'border-[#E4E3DB] bg-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4 p-4">
-                      <img
-                        src={meal.image_url || getMealImage(meal.name)}
-                        alt={meal.name}
-                        className="w-[52px] h-[52px] rounded-xl object-cover shrink-0 border border-[#E4E3DB]"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className={`font-extrabold text-[15px] leading-snug ${isActive ? 'text-gray-900' : 'text-gray-500'}`}>
-                          {meal.name}
-                        </div>
-                        <div className="text-[11px] text-gray-400 font-semibold mt-0.5 leading-normal">
-                          {getMealSubtitle(meal.name)}
-                        </div>
-                      </div>
-                      {(!!existingOrder || (isPending && (!meal.has_options || pendingOrder?.option))) && (
-                        <div className="w-8 h-8 rounded-full bg-[#BD4F19] flex items-center justify-center shrink-0">
-                          <Check size={15} strokeWidth={3} className="text-white" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Option selector */}
-                    {isPending && meal.has_options && (
-                      <div
-                        onClick={e => e.stopPropagation()}
-                        className="flex items-center gap-3 px-4 pb-4 pt-1"
-                      >
-                        <button
-                          onClick={() => handleOptionSelect('Viande')}
-                          className={`flex-1 py-2.5 rounded-xl text-[13px] font-extrabold border-2 transition-all ${
-                            pendingOrder?.option === 'Viande'
-                              ? 'bg-[#BD4F19] text-white border-[#BD4F19]'
-                              : 'bg-white text-[#BD4F19] border-[#BD4F19]'
-                          }`}
-                        >
-                          Viande
-                        </button>
-                        <button
-                          onClick={() => handleOptionSelect('Poisson')}
-                          className={`flex-1 py-2.5 rounded-xl text-[13px] font-extrabold border-2 transition-all ${
-                            pendingOrder?.option === 'Poisson'
-                              ? 'bg-[#BD4F19] text-white border-[#BD4F19]'
-                              : 'bg-white text-gray-500 border-[#E4E3DB]'
-                          }`}
-                        >
-                          Poisson
-                        </button>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Validate / Cancel Buttons */}
-            <div className="px-5 pb-10 pt-4 bg-white shrink-0 flex flex-col gap-3">
-              <button
-                onClick={handleValidate}
-                disabled={!canValidate()}
-                className="w-full py-4 bg-[#BD4F19] hover:bg-[#A64B2A] disabled:bg-[#E4E3DB] disabled:text-gray-400 text-white font-extrabold rounded-2xl text-[15px] flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] cursor-pointer disabled:cursor-not-allowed"
-              >
-                Valider ma commande →
-              </button>
-              {getCurrentEmployeeOrder() && !isLocked && (
-                <button
-                  onClick={handleDeselectOrder}
-                  className="w-full py-3 text-[#BD4F19] font-bold text-sm hover:underline"
-                >
-                  Annuler ma commande
-                </button>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-
       {/* Filter Bottom Sheet */}
       {isFilterSheetOpen && (
         <>
           <div 
-            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] transition-opacity" 
+            className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm z-[60] transition-opacity" 
             onClick={() => setIsFilterSheetOpen(false)}
           />
-          <div className="fixed bottom-0 left-0 right-0 bg-[#F5F4EC] rounded-t-3xl z-[70] flex flex-col shadow-2xl animate-slide-up h-[50vh]">
-            <div className="px-5 py-4 border-b border-[#E4E3DB] flex items-center justify-between shrink-0 bg-white rounded-t-3xl">
-              <h3 className="font-extrabold text-gray-900 text-lg">Filtres</h3>
+          <div className="fixed bottom-0 left-0 right-0 bg-[#FDFBF7] dark:bg-[#0B0F15] border-t border-slate-200 dark:border-white/10 rounded-t-3xl z-[70] flex flex-col shadow-[0_-20px_50px_rgba(0,0,0,0.1)] dark:shadow-[0_-20px_50px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom-full duration-300 max-h-[85vh]">
+            <div className="px-5 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between shrink-0 rounded-t-3xl sticky top-0 bg-[#FDFBF7] dark:bg-[#0B0F15]">
+              <h3 className="font-extrabold text-slate-900 dark:text-white text-xl">Filtres</h3>
               <button 
                 onClick={() => setIsFilterSheetOpen(false)}
-                className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-gray-200 transition-colors"
+                className="w-8 h-8 glass-button rounded-full flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
             
-            <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-6">
+            <div className="p-5 overflow-y-auto flex-1 flex flex-col gap-6 pb-32">
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Bureau (Site)</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Bureau (Site)</label>
                 <select
                   value={selectedSite}
                   onChange={e => {
                     onSiteChange(e.target.value);
                     onDeptChange('All');
                   }}
-                  className="w-full bg-white border border-[#E4E3DB] rounded-xl px-4 py-3 outline-none text-gray-800 font-medium"
+                  className="w-full glass-panel rounded-xl px-4 py-3.5 outline-none text-slate-900 dark:text-white font-bold focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all appearance-none"
                 >
-                  <option value="All">Tous les bureaux</option>
+                  <option value="All" className="bg-white dark:bg-[#0B0F15]">Tous les bureaux</option>
                   {sites.map(site => (
-                    <option key={site.id} value={site.name}>{site.name}</option>
+                    <option key={site.id} value={site.name} className="bg-white dark:bg-[#0B0F15]">{site.name}</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">Département</label>
+                <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Département</label>
                 <select
                   value={selectedDept}
                   onChange={e => onDeptChange(e.target.value)}
-                  className="w-full bg-white border border-[#E4E3DB] rounded-xl px-4 py-3 outline-none text-gray-800 font-medium"
+                  className="w-full glass-panel rounded-xl px-4 py-3.5 outline-none text-slate-900 dark:text-white font-bold focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all appearance-none"
                 >
-                  <option value="All">Tous les départements</option>
+                  <option value="All" className="bg-white dark:bg-[#0B0F15]">Tous les départements</option>
                   {departments
                     .filter(d => {
                       if (selectedSite === 'All') return true;
@@ -452,32 +558,41 @@ export default function MobileOrderView({
                       return siteObj && d.site_id === siteObj.id;
                     })
                     .map(dept => (
-                    <option key={dept.id} value={dept.name}>{dept.name}</option>
+                    <option key={dept.id} value={dept.name} className="bg-white dark:bg-[#0B0F15]">{dept.name}</option>
                   ))}
                 </select>
               </div>
             </div>
 
-            <div className="px-5 py-4 bg-white border-t border-[#E4E3DB] shrink-0 flex gap-3">
+            <div className="px-5 py-5 bg-[#FDFBF7]/90 dark:bg-[#0B0F15]/90 backdrop-blur-md border-t border-slate-200 dark:border-white/10 shrink-0 flex gap-3 absolute bottom-0 left-0 right-0">
               <button
                 onClick={() => {
                   onSiteChange('All');
                   onDeptChange('All');
                 }}
-                className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                className="flex-[0.8] py-3.5 glass-button text-slate-700 dark:text-white font-bold rounded-xl active:scale-[0.98]"
               >
                 Réinitialiser
               </button>
               <button
                 onClick={() => setIsFilterSheetOpen(false)}
-                className="flex-1 py-3 bg-[#BD4F19] text-white font-bold rounded-xl transition-colors"
+                className="flex-1 py-3.5 primary-gradient-btn rounded-xl active:scale-[0.98]"
               >
-                Appliquer
+                Voir les résultats
               </button>
             </div>
           </div>
         </>
       )}
+
+      <ConfirmModal
+        isOpen={errorModal.isOpen}
+        title="Action impossible"
+        message={errorModal.message}
+        type="danger"
+        confirmText="Compris"
+        onConfirm={() => setErrorModal({ isOpen: false, message: '' })}
+      />
     </div>
   );
 }

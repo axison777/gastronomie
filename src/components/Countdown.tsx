@@ -4,9 +4,10 @@ import { Clock } from 'lucide-react';
 interface CountdownProps {
   isLocked: boolean;
   lockTime?: string;
+  variant?: 'default' | 'minimal' | 'icon-only';
 }
 
-export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownProps) {
+export default function Countdown({ isLocked, lockTime = '18:00', variant = 'default' }: CountdownProps) {
   const [timeLeft, setTimeLeft] = useState('--:--:--');
 
   useEffect(() => {
@@ -44,6 +45,29 @@ export default function Countdown({ isLocked, lockTime = '18:00' }: CountdownPro
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [lockTime, isLocked]);
+
+  if (variant === 'minimal') {
+    return (
+      <div className="flex flex-col items-center pointer-events-auto text-shadow-sm">
+        <span className="text-white/80 text-[11px] font-bold tracking-wide uppercase">Clôture dans</span>
+        <span className="text-white text-[15px] font-extrabold flex items-center gap-1.5">
+          <Clock size={14} className={isLocked ? 'text-red-400' : 'text-orange-500'} />
+          {isLocked ? 'Session Clôturée' : timeLeft}
+        </span>
+      </div>
+    );
+  }
+
+  if (variant === 'icon-only') {
+    return (
+      <div className="flex items-center gap-1.5 pointer-events-auto">
+        <Clock size={16} className={isLocked ? 'text-red-500' : 'text-orange-500'} />
+        <span className="text-[14px] font-extrabold tracking-tight">
+          {isLocked ? 'Clôturé' : timeLeft}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div
