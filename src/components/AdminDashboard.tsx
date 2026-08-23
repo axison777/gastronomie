@@ -2428,7 +2428,7 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
                                     id: meal.id, 
                                     name: meal.name, 
                                     has_options: meal.has_options || false,
-                                    imageUrl: '',
+                                    imageUrl: meal.image_url || '',
                                     options: meal.options || (meal.has_options ? ['Viande', 'Poisson'] : [])
                                   });
                                   setNewOptionText('');
