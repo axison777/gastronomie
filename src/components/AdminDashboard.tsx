@@ -1789,19 +1789,17 @@ export default function AdminDashboard({ employees, meals, orders, config, sites
 
   const renderJournal = () => {
     const siteTotals: Record<string, number> = {};
-    // Initialize all sites from the configured sites props
-    sites.forEach(s => {
-      siteTotals[s.name] = 0;
-    });
+    const sitesInHistory = new Set<string>();
     
     if (selectedHistoryItem && selectedHistoryItem.details) {
       selectedHistoryItem.details.forEach((detail: any) => {
         const site = detail.site_name || 'Bureau 1';
+        sitesInHistory.add(site);
         siteTotals[site] = (siteTotals[site] || 0) + detail.count;
       });
     }
     
-    const uniqueSitesInItem = sites.map(s => s.name);
+    const uniqueSitesInItem = Array.from(sitesInHistory).sort();
 
     // Group meals for table
     const mealGroups: Record<string, {
