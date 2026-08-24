@@ -239,7 +239,13 @@ function App() {
   };
 
   const handleCellClick = async (employeeId: string, mealId: string, option: string | null) => {
-    if (isLocked) return;
+    if (isLocked) {
+      setErrorModal({
+        isOpen: true,
+        message: "L'heure limite est dépassée. Les commandes sont clôturées pour aujourd'hui, aucune modification n'est possible."
+      });
+      return;
+    }
 
     const employee = employees.find(e => e.id === employeeId);
     if (employee && !employee.is_active) return;

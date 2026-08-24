@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Check, Search, SlidersHorizontal, X, ChevronLeft, CheckCircle2, ArrowUpRight, Plus } from 'lucide-react';
+import { Check, Search, SlidersHorizontal, X, ChevronLeft, CheckCircle2, ArrowUpRight, Plus, Utensils, Lock } from 'lucide-react';
 import type { Employee, Meal, Order, Site, Department } from '../lib/supabase';
 import { getEmployeeDeptName, getEmployeeFullName } from '../lib/employeeUtils';
 import ConfirmModal from './ConfirmModal';
@@ -90,7 +90,14 @@ export default function MobileOrderView({
   };
 
   const handleMealSelect = (meal: Meal) => {
-    if (isLocked || !selectedEmployee) return;
+    if (isLocked) {
+      setErrorModal({
+        isOpen: true,
+        message: "L'heure limite est dépassée. Les commandes sont clôturées pour aujourd'hui, aucune modification n'est possible."
+      });
+      return;
+    }
+    if (!selectedEmployee) return;
     const currentOrder = getCurrentEmployeeOrder();
     
     if (currentOrder) {
@@ -191,68 +198,120 @@ export default function MobileOrderView({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 relative z-10">
-            {meals.map(meal => {
-              const isOrdered = currentOrder?.meal_id === meal.id;
-              const isPending = pendingOrder?.mealId === meal.id;
-              
-              return (
-                <div 
-                  key={meal.id}
-                  onClick={() => handleMealSelect(meal)}
-                  className={`relative w-full flex flex-col rounded-3xl overflow-hidden shadow-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B0F15] transition-all duration-300 active:scale-[0.98] ${
-                    isOrdered ? 'ring-2 ring-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.15)]' : ''
-                  }`}
-                >
-                  <div className="relative w-full h-[140px] shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                    {meal.image_url ? (
-                      <img 
-                        src={meal.image_url} 
-                        alt={meal.name}
-                        className="w-full h-full object-cover absolute inset-0"
-                      />
-                    ) : (
-                      <Utensils size={32} className="text-slate-300 dark:text-slate-600" />
-                    )}
-                    
-                    {/* Top Right Action Button */}
-                    {!isOrdered && !isPending && (
-                      <button 
-                        className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-md text-slate-900 dark:text-white flex items-center justify-center transition-colors shadow-sm pointer-events-none"
-                      >
-                        <Plus size={18} strokeWidth={2.5} />
-                      </button>
-                    )}
-                    {isOrdered && (
-                      <div className="absolute top-3 right-3 bg-orange-500 text-white p-1.5 rounded-full shadow-lg shadow-orange-500/40">
-                        <CheckCircle2 size={16} strokeWidth={2.5} />
-                      </div>
-                    )}
+            <>
+              {/* Locked Warning Banner */}
+              {isLocked && (
+                <div className="mb-4 p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 flex items-center gap-3 shadow-sm">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                    <Lock size={16} strokeWidth={2.5} />
                   </div>
-
-                  {/* Bottom Info Section */}
-                  <div className="p-3.5 flex flex-col gap-1.5 flex-1 justify-center z-10 bg-white dark:bg-transparent">
-                    <h3 className="font-extrabold text-slate-900 dark:text-white text-[15px] truncate">{meal.name}</h3>
-                    <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate">{getMealSubtitle(meal.name)}</p>
-                    
-                    {isOrdered && (
-                      <div className="mt-1 flex items-center gap-1.5 text-orange-500 font-bold text-xs">
-                        {meal.has_options && currentOrder.protein_option && (
-                          <span className="uppercase tracking-wider">{currentOrder.protein_option} • </span>
-                        )}
-                        <span>Commandé</span>
-                      </div>
-                    )}
+                  <div className="flex-1">
+                    <h4 className="text-xs font-extrabold text-amber-950 dark:text-amber-200">
+                      Commandes clôturées pour aujourd'hui
+                    </h4>
+                    <p className="text-[11px] font-semibold text-amber-800/90 dark:text-amber-300/80 mt-0.5">
+                      L'heure limite est dépassée. Aucune commande ni modification possible.
+                    </p>
                   </div>
                 </div>
-              );
-            })}
-            </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4 relative z-10">
+              {meals.map(meal => {
+                const isOrdered = currentOrder?.meal_id === meal.id;
+                const isPending = pendingOrder?.mealId === meal.id;
+                
+                let cardClasses = '';
+                if (isLocked) {
+                  if (isOrdered) {
+                    cardClasses = 'ring-2 ring-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.15)] cursor-not-allowed';
+                  } else {
+                    cardClasses = 'opacity-30 grayscale-[90%] border-slate-200/60 dark:border-white/5 bg-slate-100/50 dark:bg-white/[0.02] cursor-not-allowed pointer-events-none';
+                  }
+                } else {
+                  if (isOrdered) {
+                    cardClasses = 'ring-2 ring-orange-500 shadow-[0_0_30px_rgba(249,115,22,0.15)]';
+                  } else if (currentOrder) {
+                    cardClasses = 'opacity-40 grayscale-[60%] border-slate-200 dark:border-white/10 cursor-not-allowed';
+                  }
+                }
+                
+                return (
+                  <div 
+                    key={meal.id}
+                    onClick={() => handleMealSelect(meal)}
+                    className={`relative w-full flex flex-col rounded-3xl overflow-hidden shadow-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0B0F15] transition-all duration-300 active:scale-[0.98] ${cardClasses}`}
+                  >
+                    <div className="relative w-full h-[140px] shrink-0 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      {meal.image_url ? (
+                        <img 
+                          src={meal.image_url} 
+                          alt={meal.name}
+                          className={`w-full h-full object-cover absolute inset-0 transition-transform duration-700 ${!isLocked && !currentOrder ? 'group-hover:scale-105' : ''}`}
+                        />
+                      ) : (
+                        <Utensils size={32} className="text-slate-300 dark:text-slate-600" />
+                      )}
+                      
+                      {/* Top Right Action Button */}
+                      {!isLocked && !isOrdered && !isPending && !currentOrder && (
+                        <button 
+                          className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/50 dark:bg-black/50 backdrop-blur-md text-slate-900 dark:text-white flex items-center justify-center transition-colors shadow-sm pointer-events-none"
+                        >
+                          <Plus size={18} strokeWidth={2.5} />
+                        </button>
+                      )}
+                      {isOrdered && (
+                        <div className="absolute top-3 right-3 bg-orange-500 text-white p-1.5 rounded-full shadow-lg shadow-orange-500/40 flex items-center justify-center">
+                          {isLocked ? <Lock size={15} strokeWidth={2.5} /> : <CheckCircle2 size={16} strokeWidth={2.5} />}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bottom Info Section */}
+                    <div className="p-3.5 flex flex-col gap-1.5 flex-1 justify-center z-10 bg-white dark:bg-transparent">
+                      <h3 className={`font-extrabold text-[15px] truncate ${(isLocked && !isOrdered) || (!isLocked && currentOrder && !isOrdered) ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                        {meal.name}
+                      </h3>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate">{getMealSubtitle(meal.name)}</p>
+                      
+                      {isLocked ? (
+                        isOrdered ? (
+                          <div className="mt-1 flex items-center gap-1.5 text-orange-500 font-bold text-xs">
+                            <Lock size={12} />
+                            {meal.has_options && currentOrder.protein_option && (
+                              <span className="uppercase tracking-wider">{currentOrder.protein_option} • </span>
+                            )}
+                            <span>Commandé</span>
+                          </div>
+                        ) : (
+                          <div className="mt-1 text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                            Clôturé
+                          </div>
+                        )
+                      ) : isOrdered ? (
+                        <div className="mt-1 flex items-center gap-1.5 text-orange-500 font-bold text-xs">
+                          {meal.has_options && currentOrder.protein_option && (
+                            <span className="uppercase tracking-wider">{currentOrder.protein_option} • </span>
+                          )}
+                          <span>Commandé</span>
+                        </div>
+                      ) : currentOrder ? (
+                        <div className="mt-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500">
+                          Non choisi
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+              </div>
+            </>
           )}
         </div>
 
         {/* Validate Floating Action Button */}
-        {pendingOrder && !selectedMealForDetail && (
+        {!isLocked && pendingOrder && !selectedMealForDetail && (
           <div className="fixed bottom-0 left-0 right-0 p-5 bg-gradient-to-t from-[#FDFBF7] dark:from-[#0B0F15] via-[#FDFBF7]/90 dark:via-[#0B0F15]/90 to-transparent pt-12 z-20">
             <button
               onClick={handleValidate}
@@ -299,27 +358,25 @@ export default function MobileOrderView({
                   setSelectedMealForDetail(null);
                   setPendingOrder(null);
                 }}
-                className="absolute top-6 left-5 w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white"
+                className="absolute top-6 left-6 w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center text-white z-20"
               >
-                <ChevronLeft size={24} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Details Area */}
-            <div className="flex-1 flex flex-col -mt-8 bg-white dark:bg-[#0B0F15] rounded-t-[32px] overflow-hidden relative z-10">
-              <div className="flex-1 overflow-y-auto px-6 pt-8 pb-32">
-                <div className="flex items-start justify-between gap-4 mb-4">
-                  <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight">
-                    {selectedMealForDetail.name}
-                  </h2>
-                </div>
-                
-                <p className="text-slate-500 dark:text-slate-400 leading-relaxed mb-8">
-                  {getMealSubtitle(selectedMealForDetail.name)}. Un plat délicieux préparé avec des ingrédients frais et une attention particulière pour satisfaire toutes vos envies gourmandes.
+            {/* Modal Body */}
+            <div className="flex-1 p-6 flex flex-col justify-between overflow-y-auto">
+              <div>
+                <h2 className="text-2xl font-extrabold text-slate-900 dark:text-white leading-tight mb-2">
+                  {selectedMealForDetail.name}
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6">
+                  {getMealSubtitle(selectedMealForDetail.name)}. Plat préparé avec des ingrédients frais du jour.
                 </p>
 
+                {/* Option selector if has_options */}
                 {selectedMealForDetail.has_options && (
-                  <div className="mb-8">
+                  <div className="mb-6">
                     <h3 className="font-extrabold text-slate-900 dark:text-white text-lg mb-4">Option (Requis)</h3>
                     <div className="flex flex-wrap gap-3">
                       {(selectedMealForDetail.options?.length ? selectedMealForDetail.options : ['Viande', 'Poisson']).map(option => (
@@ -344,10 +401,17 @@ export default function MobileOrderView({
               <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white dark:from-[#0B0F15] via-white/90 dark:via-[#0B0F15]/90 to-transparent pt-12">
                 <button
                   onClick={handleValidate}
-                  disabled={!canValidate()}
+                  disabled={isLocked || !canValidate()}
                   className="w-full py-4 bg-[#FF6B4A] hover:bg-[#F25A38] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-white/30 text-white font-extrabold rounded-[20px] text-[16px] flex items-center justify-center gap-2 transition-all shadow-[0_8px_20px_rgba(255,107,74,0.3)] disabled:shadow-none active:scale-[0.98] disabled:scale-100"
                 >
-                  Valider ma commande
+                  {isLocked ? (
+                    <>
+                      <Lock size={18} />
+                      Commandes clôturées
+                    </>
+                  ) : (
+                    'Valider ma commande'
+                  )}
                 </button>
               </div>
             </div>
