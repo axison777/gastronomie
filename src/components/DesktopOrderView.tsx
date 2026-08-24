@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Check, Search, ChevronDown, CheckCircle2, Plus, MoreHorizontal } from 'lucide-react';
+import { Check, Search, ChevronDown, CheckCircle2, Plus, MoreHorizontal, Utensils, Lock } from 'lucide-react';
 import type { Employee, Meal, Order, Site, Department } from '../lib/supabase';
 import { getEmployeeDeptName, getEmployeeFullName, getEmployeeSiteName } from '../lib/employeeUtils';
 import ConfirmModal from './ConfirmModal';
@@ -331,10 +331,17 @@ export default function DesktopOrderView({
                 <div className="mt-auto pt-4">
                   <button
                     onClick={handleValidateDetail}
-                    disabled={selectedMealForDetail.has_options ? !pendingOrderOption : false}
+                    disabled={isLocked || (selectedMealForDetail.has_options ? !pendingOrderOption : false)}
                     className="w-full py-3.5 bg-[#FF6B4A] hover:bg-[#F25A38] disabled:bg-slate-200 dark:disabled:bg-white/10 disabled:text-slate-400 dark:disabled:text-white/30 text-white font-extrabold rounded-xl text-[16px] flex items-center justify-center gap-2 transition-all shadow-[0_8px_20px_rgba(255,107,74,0.3)] disabled:shadow-none active:scale-[0.98] disabled:scale-100"
                   >
-                    Valider la commande
+                    {isLocked ? (
+                      <>
+                        <Lock size={18} />
+                        Commandes clôturées
+                      </>
+                    ) : (
+                      'Valider la commande'
+                    )}
                   </button>
                 </div>
               </div>
@@ -349,18 +356,26 @@ export default function DesktopOrderView({
                   Menu de <span className="text-orange-500 dark:text-orange-400">{selectedEmployee.first_name}</span>
                 </h2>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 font-medium">
-                  {getEmployeeOrder(selectedEmployee.id) ? 'Commande effectuée' : 'Veuillez sélectionner un plat'}
+                  {getEmployeeOrder(selectedEmployee.id) 
+                    ? 'Commande effectuée' 
+                    : isLocked 
+                      ? 'Commandes clôturées pour aujourd\'hui'
+                      : 'Veuillez sélectionner un plat'}
                 </p>
               </div>
-              {getEmployeeOrder(selectedEmployee.id) && (
+              {isLocked ? (
+                <div className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 rounded-xl text-xs font-bold shadow-sm">
+                  <Lock size={14} className="shrink-0" />
+                  <span>Commandes clôturées</span>
+                </div>
+              ) : getEmployeeOrder(selectedEmployee.id) ? (
                 <button 
                   onClick={() => onCellClick(selectedEmployee.id, getEmployeeOrder(selectedEmployee.id)!.meal_id, null)}
                   className="px-4 py-2 text-sm font-bold text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg transition-colors"
-                  disabled={isLocked}
                 >
                   Annuler la commande
                 </button>
-              )}
+              ) : null}
             </div>
 
             {/* Bento Grid */}
@@ -368,16 +383,20 @@ export default function DesktopOrderView({
               <div className="grid grid-cols-3 gap-6">
                 {meals.map((meal) => {
                   const empOrder = getEmployeeOrder(selectedEmployee.id);
+                  const hasOrder = !!empOrder;
                   const isOrdered = empOrder?.meal_id === meal.id;
+                  const isOtherMeal = hasOrder && !isOrdered;
                   
                   return (
                     <div 
                       key={meal.id}
                       onClick={() => handleMealClick(meal)}
-                      className={`relative w-full rounded-[24px] bg-white/60 dark:bg-white/5 backdrop-blur-xl p-3 group cursor-pointer transition-all duration-300 border ${
+                      className={`relative w-full rounded-[24px] bg-white/60 dark:bg-white/5 backdrop-blur-xl p-3 group transition-all duration-300 border ${
                         isOrdered 
-                          ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.15)] ring-1 ring-orange-500' 
-                          : 'border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10 hover:shadow-xl'
+                          ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.15)] ring-1 ring-orange-500 cursor-pointer' 
+                          : isOtherMeal
+                            ? 'opacity-40 grayscale-[60%] border-slate-100 dark:border-white/5 hover:opacity-60 cursor-not-allowed'
+                            : 'border-slate-100 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10 hover:shadow-xl cursor-pointer'
                       }`}
                     >
                       {/* Top Image Section */}
@@ -386,16 +405,18 @@ export default function DesktopOrderView({
                           <img 
                             src={meal.image_url} 
                             alt={meal.name}
-                            className="w-full h-full object-cover absolute inset-0 transition-transform duration-700 group-hover:scale-105"
+                            className={`w-full h-full object-cover absolute inset-0 transition-transform duration-700 ${!isOtherMeal ? 'group-hover:scale-105' : ''}`}
                           />
                         ) : (
                           <Utensils size={32} className="text-slate-300" />
                         )}
                         
                         {/* More Button Overlay */}
-                        <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white dark:bg-[#0B0F15] flex items-center justify-center shadow-md text-slate-700 dark:text-slate-300">
-                           <MoreHorizontal size={18} strokeWidth={2.5} />
-                        </div>
+                        {!isOtherMeal && (
+                          <div className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white dark:bg-[#0B0F15] flex items-center justify-center shadow-md text-slate-700 dark:text-slate-300">
+                             <MoreHorizontal size={18} strokeWidth={2.5} />
+                          </div>
+                        )}
                         
                         {/* Status badge */}
                         {isOrdered && (
@@ -407,11 +428,13 @@ export default function DesktopOrderView({
 
                       {/* Info Section */}
                       <div className="mt-3 px-1">
-                        <h3 className="font-semibold text-slate-900 dark:text-white text-[15px] truncate">{meal.name}</h3>
+                        <h3 className={`font-semibold text-[15px] truncate ${isOtherMeal ? 'text-slate-500 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>
+                          {meal.name}
+                        </h3>
                         
                         <div className="flex items-center justify-between mt-3">
                            {/* Price or subtitle */}
-                           <span className="text-slate-600 dark:text-slate-400 font-medium text-[13px] truncate flex-1">
+                           <span className="text-slate-500 dark:text-slate-400 font-medium text-[13px] truncate flex-1">
                               {getMealSubtitle(meal.name)}
                            </span>
                            
@@ -420,6 +443,10 @@ export default function DesktopOrderView({
                              {isOrdered ? (
                                <div className="bg-orange-50 dark:bg-orange-500/10 text-orange-600 dark:text-orange-400 font-bold px-3 py-1.5 rounded-lg text-xs border border-orange-200 dark:border-orange-500/20">
                                  {meal.has_options && empOrder.protein_option ? `${empOrder.protein_option}` : 'Sélectionné'}
+                               </div>
+                             ) : isOtherMeal ? (
+                               <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-white/5 px-2.5 py-1 rounded-md">
+                                 Non choisi
                                </div>
                              ) : (
                                <button 
